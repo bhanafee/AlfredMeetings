@@ -31,6 +31,16 @@
 				<key>vitoclose</key>
 				<false/>
 			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>10000000-0000-0000-0000-000000000012</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string>auto-transcribe after recording</string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
 		</array>
 		<key>10000000-0000-0000-0000-000000000011</key>
 		<array>
@@ -210,7 +220,7 @@
 				<key>lastpathcomponent</key>
 				<false/>
 				<key>onlyshowifquerypopulated</key>
-				<false/>
+				<true/>
 				<key>removeextension</key>
 				<false/>
 				<key>text</key>
