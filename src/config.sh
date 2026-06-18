@@ -75,6 +75,24 @@ CAPTURE_DEVICE="${MEETINGS_CAPTURE_DEVICE:-Input Capture ($(_input_device))}"
 OUTPUT_DEVICE="${MEETINGS_OUTPUT_DEVICE:-Output Capture ($(_output_device))}"
 
 # --- Internal: venv + state live OUTSIDE the (re-importable) workflow bundle -
-SUPPORT="${alfred_workflow_data:-$HOME/Library/Application Support/AlfredMeetings}"
+# Pin to a fixed path (NOT $alfred_workflow_data): install.sh runs from the
+# terminal where that var is unset, so it must resolve to the same place the
+# scripts use when Alfred runs them — otherwise the venv install.sh built can't
+# be found under Alfred. Override with MEETINGS_SUPPORT if you must relocate it.
+SUPPORT="${MEETINGS_SUPPORT:-$HOME/Library/Application Support/AlfredMeetings}"
 VENV="$SUPPORT/venv"
 PY="$VENV/bin/python3"
+
+# ffmpeg for MICROPHONE capture. macOS aborts (SIGABRT) any process that opens the
+# mic without an NSMicrophoneUsageDescription. Alfred disclaims responsibility for
+# the processes it spawns, so bare Homebrew ffmpeg becomes its own responsible
+# process, has no usage description, and crashes. setup/install.sh wraps a copy of
+# ffmpeg in a signed .app that carries the description; use that for capture and
+# fall back to plain ffmpeg (fine from a terminal, crashes under Alfred).
+MIC_FFMPEG="${MEETINGS_MIC_FFMPEG:-$SUPPORT/MicCapture.app/Contents/MacOS/ffmpeg}"
+[ -x "$MIC_FFMPEG" ] || MIC_FFMPEG="ffmpeg"
+
+# record.sh launches this .app via `open` so it becomes its OWN TCC-responsible
+# process. Running the binary directly under Alfred makes *Alfred* responsible, and
+# Alfred has no NSMicrophoneUsageDescription, so macOS aborts the capture (SIGABRT).
+MIC_APP="${MEETINGS_MIC_APP:-$SUPPORT/MicCapture.app}"
