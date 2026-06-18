@@ -1,6 +1,8 @@
 # Handoff — AlfredMeetings
 
-/ Status as of 2026-06-18. Recorder + transcriber + notes all verified live. /
+/ Status as of 2026-06-18. Recording now works **inside Alfred** (the hard part — a
+macOS TCC/microphone fight, see below). Scripts all verified; `transcribe`/`notes`
+still want one run through the Alfred GUI. /
 
 ## What this project is
 An Alfred 5 workflow (repo = source of truth, packaged via `./build.sh`) with three
@@ -12,7 +14,9 @@ local Ollama). Full design + usage in `README.md`. All processing is local.
 - **`rec`** (component 1) — built and verified live across **all three device paths**
   (Jabra USB, built-in mic+speakers, Bluetooth headset): start/stop, output
   switch + restore, channel layout (c0 = mic → Me/left, c1+c2 = BlackHole → Them/right;
-  pan filter unchanged), and clean stereo split confirmed each time.
+  pan filter unchanged), and clean stereo split confirmed each time. **Verified running
+  from the Alfred GUI** (commit `5479f3e`) after solving the microphone-TCC problem
+  below — a real recording lands in `~/Desktop/Meeting Notes/` with the mic on Me.
 - **`transcribe`** (component 2) — built, e2e verified. Independent per-channel Whisper
   passes → `Me`/`Them` labels → chronological merge. **No-speech gate added** (commit
   `4f61d38`): Whisper hallucinates confident filler ("Thank you.") on a *silent*
@@ -46,6 +50,27 @@ Six devices exist, one aggregate-input + one multi-output per source:
 Each aggregate = that mic **first** + BlackHole 2ch; each multi-output = that device +
 BlackHole 2ch. See `setup/audio-setup.md`.
 
+## Microphone under Alfred — the TCC fix (READ THIS before touching recording)
+macOS aborts (SIGABRT, `Termination Namespace TCC`) any process that opens the mic
+unless its **responsible process** declares `NSMicrophoneUsageDescription`. Alfred
+disclaims responsibility for the processes it spawns **and** has no mic usage string,
+so bare Homebrew `ffmpeg` becomes the responsible process, has no usage description,
+and is killed *before any permission prompt* — the symptom was: `rec` produced no
+file, no prompt, empty `ffmpeg.log`, and an `ffmpeg-*.ips` crash report. (Diagnosed
+from that crash report; `tccutil`/restarting Alfred/foreground probes all failed
+because Alfred can never be the responsible app for the mic.)
+
+**Fix (commit `5479f3e`):** `setup/install.sh` builds an ad-hoc-signed
+`~/Library/Application Support/AlfredMeetings/MicCapture.app` = a *copy of ffmpeg* as
+the bundle exec + an `Info.plist` carrying `NSMicrophoneUsageDescription` (and
+`LSUIElement` so it doesn't steal focus). `record.sh` launches it with
+`open -n -a "$MIC_APP" --args …`, so LaunchServices makes **the app its own
+responsible process** → its usage description applies → macOS prompts normally
+("AlfredMeetings Mic Capture"). Because `open` detaches the process, start/stop find
+it by the unique `rec_<stamp>.m4a` filename in its argv (`pgrep`/`pkill -INT`), not a
+pid. If the app is rebuilt/re-signed its cdhash changes → the mic grant must be
+re-approved once.
+
 ## Environment already set up
 - Homebrew (under the user's *install* account — the everyday account CANNOT brew
   install; always ask the user to run brew commands): `ffmpeg`, `switchaudio-osx`,
@@ -53,17 +78,25 @@ BlackHole 2ch. See `setup/audio-setup.md`.
 - Ollama serving `qwen3:4b-instruct` on :11434.
 - Python venv at `~/Library/Application Support/AlfredMeetings/venv` with
   `mlx-whisper` + `openai` + `numpy` (numpy used by the energy gate).
+- `MicCapture.app` built in the same support dir by `setup/install.sh` (see above).
+  `SUPPORT` is pinned to that fixed path (NOT `$alfred_workflow_data`) in `config.sh`
+  + `install.sh`, so the venv and wrapper resolve the same whether you or Alfred runs
+  the scripts.
 
 ## Remaining work
-Everything is verified **outside** Alfred via `record.sh`/`transcribe.sh`/`notes.sh`
-(same code Alfred runs). The only thing left is exercising the **Alfred GUI graph with
-the real mic**:
-1. `./build.sh && open dist/AlfredMeetings.alfredworkflow` → Import in Alfred.
-2. Trigger `rec` in Alfred once → **grant Alfred mic permission** on the first run →
-   speak (play a clip too for a two-party test) → `rec` to stop → `transcribe` →
-   `notes` → Minutes. Confirm files land in `~/Desktop/Meeting Notes/` and
-   notifications fire.
-3. Any GUI fix → re-export, but keep the repo authoritative (mirror into `src/`).
+- **`rec` from Alfred:** ✅ done (prompt → Allow once → records; verified).
+- **`transcribe` + `notes` from Alfred GUI:** not yet run *under Alfred*, only via the
+  scripts directly. They use the venv, whose path was just fixed by the `SUPPORT` pin,
+  so they should work — but confirm: in Alfred run `transcribe` (newest rec) → `notes`
+  → Minutes, and check the transcript/notes land in `~/Desktop/Meeting Notes/` and the
+  notifications fire.
+- **Installer reproducibility:** the live fixes were synced straight into the installed
+  workflow dir and `MicCapture.app` was built by hand during debugging. For a clean
+  machine the flow is: `setup/install.sh` (builds venv + `MicCapture.app`) →
+  `./build.sh && open dist/AlfredMeetings.alfredworkflow` (import) → first `rec` grants
+  the mic prompt. Worth doing once from scratch to confirm `install.sh` alone produces
+  a working `MicCapture.app`.
+- Keep the repo authoritative: any GUI fix → mirror into `src/` and re-export.
 
 ## Conventions / gotchas
 - **Device quality**: Bluetooth mic forces SCO → low-quality *listening* for the whole
