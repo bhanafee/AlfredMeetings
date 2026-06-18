@@ -1,14 +1,17 @@
 # Handoff — AlfredMeetings
 
 / Status as of 2026-06-18. Recording now works **inside Alfred** (the hard part — a
-macOS TCC/microphone fight, see below). Scripts all verified; `transcribe`/`notes`
-still want one run through the Alfred GUI. /
+macOS TCC/microphone fight, see below), and `rec` now **auto-transcribes** on stop.
+Scripts all verified; the auto-transcribe chain + `notes` still want one run through
+the Alfred GUI. /
 
 ## What this project is
 An Alfred 5 workflow (repo = source of truth, packaged via `./build.sh`) with three
-independent components: `rec` (toggle stereo recording), `transcribe` (stereo →
-speaker-labeled Markdown), `notes` (transcript → minutes/summary/clean/custom via
-local Ollama). Full design + usage in `README.md`. All processing is local.
+components: `rec` (toggle stereo recording), `transcribe` (stereo → speaker-labeled
+Markdown), `notes` (transcript → minutes/summary/clean/custom via local Ollama). Full
+design + usage in `README.md`. All processing is local. **`rec` now auto-transcribes:
+stopping a recording produces the transcript automatically (commit `f0e1c19`); the
+`transcribe` keyword remains for manual/re-runs. `notes` is still run manually.**
 
 ## Done and verified
 - **`rec`** (component 1) — built and verified live across **all three device paths**
@@ -85,11 +88,16 @@ re-approved once.
 
 ## Remaining work
 - **`rec` from Alfred:** ✅ done (prompt → Allow once → records; verified).
-- **`transcribe` + `notes` from Alfred GUI:** not yet run *under Alfred*, only via the
-  scripts directly. They use the venv, whose path was just fixed by the `SUPPORT` pin,
-  so they should work — but confirm: in Alfred run `transcribe` (newest rec) → `notes`
-  → Minutes, and check the transcript/notes land in `~/Desktop/Meeting Notes/` and the
-  notifications fire.
+- **Auto-transcribe chain (`rec` stop → transcript):** wired + logic-verified (guard
+  silent on start, stop-path resolves newest → transcript) and Alfred was reloaded so
+  the new graph (`002 → 003` + `002 → 012`) is live — but **not yet confirmed by a real
+  rec→stop in the Alfred GUI**. Do that: `rec`, speak, `rec` to stop → expect a "Saved"
+  notification then a "Transcript ready" notification + a `*.transcript.md` file. (Note:
+  transcription runs while Alfred shows the transcribe action "running"; on a long
+  meeting that's a minute+.)
+- **`notes` from Alfred GUI:** still not run *under Alfred*, only via the script. Uses
+  the venv (path fixed by the `SUPPORT` pin) + Ollama. Confirm: `notes` → Minutes lands
+  in `~/Desktop/Meeting Notes/` and the notification fires.
 - **Installer reproducibility:** the live fixes were synced straight into the installed
   workflow dir and `MicCapture.app` was built by hand during debugging. For a clean
   machine the flow is: `setup/install.sh` (builds venv + `MicCapture.app`) →
@@ -113,6 +121,12 @@ re-approved once.
 - Scripts compute `ROOT` from `BASH_SOURCE` and source `config.sh`; Alfred runs them
   with cwd = bundle root, so the `./bin/...` paths in `info.plist` resolve. `config.sh`
   prepends `/opt/homebrew/bin` to PATH so `SwitchAudioSource` resolves during auto.
+- **Iterating on the installed workflow:** the installed copy lives at
+  `~/Library/Application Support/Alfred/Alfred.alfredpreferences/workflows/user.workflow.*/`.
+  Copying changed **scripts** in takes effect immediately (Alfred re-reads them per run);
+  changing **`info.plist`** (the graph/config) needs Alfred to reload — restart Alfred
+  (`osascript -e 'tell application "Alfred" to quit'` then `open -a "Alfred 5"`) or
+  reimport. Always mirror fixes back into `src/` so the repo stays authoritative.
 - `config.sh` reads `MEETINGS_*` env vars with `:-` defaults, so empty Alfred config
   values safely fall back.
 - Naming contract between steps: recordings `rec_*.m4a`, transcripts
