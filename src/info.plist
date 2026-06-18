@@ -400,6 +400,74 @@ First-time setup: run setup/install.sh (builds the Python venv) and follow setup
 			<key>config</key>
 			<dict>
 				<key>default</key>
+				<string>auto</string>
+				<key>pairs</key>
+				<array>
+					<array>
+						<string>Auto — Jabra ▸ Built-in ▸ Bluetooth</string>
+						<string>auto</string>
+					</array>
+					<array>
+						<string>Jabra</string>
+						<string>jabra</string>
+					</array>
+					<array>
+						<string>Built-in mic</string>
+						<string>builtin</string>
+					</array>
+					<array>
+						<string>Bluetooth</string>
+						<string>bluetooth</string>
+					</array>
+				</array>
+			</dict>
+			<key>description</key>
+			<string>Your voice. "Auto" picks the first connected device: Jabra, then Built-in, then Bluetooth. Each maps to an aggregate input you build in Audio MIDI Setup. See setup/audio-setup.md.</string>
+			<key>label</key>
+			<string>Microphone (input)</string>
+			<key>type</key>
+			<string>popupbutton</string>
+			<key>variable</key>
+			<string>MEETINGS_INPUT_SOURCE</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>auto</string>
+				<key>pairs</key>
+				<array>
+					<array>
+						<string>Auto — Jabra ▸ Bluetooth ▸ Built-in</string>
+						<string>auto</string>
+					</array>
+					<array>
+						<string>Jabra</string>
+						<string>jabra</string>
+					</array>
+					<array>
+						<string>Bluetooth</string>
+						<string>bluetooth</string>
+					</array>
+					<array>
+						<string>Built-in speakers</string>
+						<string>builtin</string>
+					</array>
+				</array>
+			</dict>
+			<key>description</key>
+			<string>What you hear (also mirrored to BlackHole for capture). "Auto" picks the first connected device: Jabra, then Bluetooth, then Built-in. Each maps to a multi-output you build in Audio MIDI Setup. See setup/audio-setup.md.</string>
+			<key>label</key>
+			<string>Listening device (output)</string>
+			<key>type</key>
+			<string>popupbutton</string>
+			<key>variable</key>
+			<string>MEETINGS_OUTPUT_SOURCE</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
 				<string></string>
 				<key>placeholder</key>
 				<string>~/Desktop/Meeting Notes</string>
@@ -465,14 +533,14 @@ First-time setup: run setup/install.sh (builds the Python venv) and follow setup
 				<key>default</key>
 				<string></string>
 				<key>placeholder</key>
-				<string>Meeting Capture</string>
+				<string>(set by Microphone choice)</string>
 				<key>required</key>
 				<false/>
 				<key>trim</key>
 				<true/>
 			</dict>
 			<key>description</key>
-			<string>Aggregate input device name. Leave blank for 'Meeting Capture'.</string>
+			<string>Advanced: name an aggregate input device to use regardless of the Microphone choice above. Leave blank to use the Microphone choice.</string>
 			<key>label</key>
 			<string>Capture device</string>
 			<key>type</key>
@@ -486,14 +554,14 @@ First-time setup: run setup/install.sh (builds the Python venv) and follow setup
 				<key>default</key>
 				<string></string>
 				<key>placeholder</key>
-				<string>Meeting Output</string>
+				<string>(set by Listening device choice)</string>
 				<key>required</key>
 				<false/>
 				<key>trim</key>
 				<true/>
 			</dict>
 			<key>description</key>
-			<string>Multi-output device name. Leave blank for 'Meeting Output'.</string>
+			<string>Advanced: name a multi-output device to use regardless of the Listening device choice above. Leave blank to use the Listening device choice.</string>
 			<key>label</key>
 			<string>Output device</string>
 			<key>type</key>
@@ -506,6 +574,10 @@ First-time setup: run setup/install.sh (builds the Python venv) and follow setup
 	<dict>
 		<key>MEETINGS_CAPTURE_DEVICE</key>
 		<string></string>
+		<key>MEETINGS_INPUT_SOURCE</key>
+		<string>auto</string>
+		<key>MEETINGS_OUTPUT_SOURCE</key>
+		<string>auto</string>
 		<key>MEETINGS_LLM_MODEL</key>
 		<string></string>
 		<key>MEETINGS_OUTPUT_DEVICE</key>

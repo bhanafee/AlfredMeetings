@@ -15,63 +15,75 @@ brew install --cask blackhole-2ch
 
 If BlackHole doesn't appear in Audio MIDI Setup afterwards, restart the Mac once.
 
-## 2. Create two devices in Audio MIDI Setup
+## 2. Create the devices in Audio MIDI Setup
 
-Open **Audio MIDI Setup** (Spotlight → "Audio MIDI Setup"). Click the **+** at the
-bottom-left.
+The **Microphone (input)** and **Listening device (output)** are chosen independently
+in Alfred → Configure Workflow. Each can be a specific source or **Auto** (the default),
+which picks the first *currently connected* device by priority:
 
-### a) Aggregate Device — name it exactly `Meeting Capture`
-Tick, **in this order**:
-1. **Built-in Microphone** (1 channel)
+- **Microphone** order: Jabra → Built-in → Bluetooth
+- **Listening device** order: Jabra → Bluetooth → Built-in
+
+Each source maps to a device you build once in Audio MIDI Setup, named by an exact
+convention: **`Input Capture (<device name>)`** for the aggregate input and
+**`Output Capture (<device name>)`** for the multi-output, where `<device name>` is the
+*exact* name of the underlying mic/listening device. Build the pairs for whatever
+hardware you use (or override the whole name via `MEETINGS_CAPTURE_DEVICE` /
+`MEETINGS_OUTPUT_DEVICE`).
+
+| Source | Aggregate INPUT (mic + BlackHole) | Multi-OUTPUT (listen + BlackHole) |
+|---|---|---|
+| **Jabra** | `Input Capture (Jabra Engage 75)` = Jabra Engage 75 + BlackHole 2ch | `Output Capture (Jabra Engage 75)` = Jabra Engage 75 + BlackHole 2ch |
+| **Built-in** | `Input Capture (MacBook Air Microphone)` = MacBook Air Microphone + BlackHole 2ch | `Output Capture (MacBook Air Speakers)` = MacBook Air Speakers + BlackHole 2ch |
+| **Bluetooth** | `Input Capture (Headphones)` = Headphones + BlackHole 2ch | `Output Capture (Headphones)` = Headphones + BlackHole 2ch |
+
+Open **Audio MIDI Setup** (Spotlight → "Audio MIDI Setup") and use the **+** at the
+bottom-left to add each device. Connect a Bluetooth/USB device first so it's tickable.
+
+### Aggregate inputs
+Tick the sub-devices **in this order — the mic must be first** so it lands on channel 1:
+
+1. **the mic** (1 channel) — `Jabra Engage 75`, `MacBook Air Microphone`, or `Headphones`
 2. **BlackHole 2ch** (2 channels)
 
 This produces a 3-channel input: channel 1 = your mic, channels 2–3 = system audio.
-The recorder maps channel 1 → left (**Me**) and channels 2–3 → right (**Them**).
+The recorder maps channel 1 → left (**Me**) and channels 2–3 → right (**Them**). Set
+the **Primary**/clock source to the mic and tick **Drift Correction** on BlackHole.
 
-> Order matters: the mic must be the first sub-device so it lands on channel 1.
-
-### b) Multi-Output Device — name it exactly `Meeting Output`
+### Multi-outputs
 Tick:
-1. **Headphones** (see the bleed warning below — strongly preferred over speakers)
+
+1. **the listening device** — `Jabra Engage 75`, `Headphones`, or `MacBook Air Speakers`
 2. **BlackHole 2ch**
 
-This lets you still *hear* the call while its audio is mirrored into BlackHole for
-capture. The recorder switches your output to this device while recording and
-restores your previous output device when you stop.
+This lets you still *hear* the call while it's mirrored into BlackHole. The recorder
+switches your output to this device while recording and restores your previous output
+when you stop. Set the **Primary**/clock source to **BlackHole 2ch** and tick **Drift
+Correction** on the listening device.
 
-In Audio MIDI Setup, set the **Primary**/clock source to **BlackHole 2ch** and tick
-**Drift Correction** on the other member so the two stay in sync.
+> ⚠️ **Prefer a headset over speakers.** If your listening device is a *speaker* that
+> plays the call out loud, your mic picks the far side back up acoustically and it leaks
+> into the **Me** channel — Whisper transcribes even faint bleed, so the far side gets
+> mislabeled as you, and the other party hears their own echo. A headset (Jabra,
+> Bluetooth) eliminates both (verified: routed only through a headset/BlackHole the mic
+> channel sits at the −64 dB noise floor). Use the built-in **speakers** output only for
+> solo dictation or a quiet room where you won't talk over the other side.
 
-> ⚠️ **Use headphones, not speakers.** If a member of `Meeting Output` is a *speaker*
-> that plays the call out loud, your built-in mic picks the far side back up
-> acoustically and it leaks into the **Me** (left) channel — Whisper is sensitive
-> enough to transcribe even faint bleed, so the far side gets mislabeled as you.
-> Listening on headphones eliminates this entirely (verified: with audio routed only
-> through BlackHole/headphones the mic channel sits at the −64 dB noise floor while
-> the system channel carries the call cleanly). Electrical channel separation in the
-> aggregate is perfect; the *only* cross-talk risk is acoustic echo from speakers.
-
-#### Switching between headphones and speakers
-The recorder always routes to whatever device is named by `MEETINGS_OUTPUT_DEVICE`
-(default `Meeting Output`). A Multi-Output Device only sends audio to the members that
-are *currently connected*, so:
-
-- **Headphones-only `Meeting Output` (recommended):** when your headphones are
-  connected you hear the call through them and the mic stays clean. When they're
-  *not* connected the device still feeds BlackHole (so capture keeps working) but you
-  hear nothing — a built-in reminder to plug them in before talking.
-- **Need speakers sometimes too?** Don't add the speakers to the same device (both
-  would play at once whenever both are present, reintroducing the bleed). Instead make
-  a *second* Multi-Output Device, e.g. `Meeting Output (Speakers)` = MacBook Air
-  Speakers + BlackHole 2ch, and switch by setting the workflow variable
-  `MEETINGS_OUTPUT_DEVICE` (Alfred → Configure Workflow, or export it in your shell)
-  to the device you want for that session.
+> 🎧 **Device quality notes.** Using a *Bluetooth* headset's mic forces the link into
+> hands-free (SCO) mode, dropping what you hear to low quality for the whole call; pair
+> Bluetooth **output** with a different mic (Auto's input order avoids the Bluetooth mic
+> when a Jabra or built-in mic is present) to keep listening in hi-fi. The Jabra (USB)
+> does **not** degrade its output when its mic is open (verified) — it's the most
+> robust all-round meeting choice.
 
 ## 3. Verify
 
 ```
-SwitchAudioSource -a            # should list "Meeting Capture" and "Meeting Output"
+SwitchAudioSource -a    # lists every device; confirm the pairs you built appear
 ```
 
-If you named the devices differently, set `MEETINGS_CAPTURE_DEVICE` /
-`MEETINGS_OUTPUT_DEVICE` (see `src/config.sh`) to match.
+With both dropdowns on **Auto**, the recorder logs which device it chose. If you named
+devices differently, set `MEETINGS_CAPTURE_DEVICE` / `MEETINGS_OUTPUT_DEVICE` (Alfred →
+Configure Workflow) to force exact names, or adjust the detection names
+`MEETINGS_DEV_JABRA` / `MEETINGS_DEV_BLUETOOTH` / `MEETINGS_DEV_BUILTIN_MIC` /
+`MEETINGS_DEV_BUILTIN_OUT` (see `src/config.sh`).
