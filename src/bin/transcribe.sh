@@ -1,0 +1,29 @@
+#!/bin/bash
+# Component 2: transcribe a (stereo) recording into a speaker-labeled Markdown
+# transcript.
+#
+# Usage: transcribe.sh [audio_file]
+# If audio_file is omitted, the newest rec_*.m4a in OUTPUT_DIR is used.
+set -e
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+. "$ROOT/config.sh"
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
+AUDIO="${1:-}"
+if [ -z "$AUDIO" ]; then
+  AUDIO="$(/bin/ls -t "$OUTPUT_DIR"/rec_*.m4a 2>/dev/null | head -1 || true)"
+fi
+if [ -z "$AUDIO" ] || [ ! -f "$AUDIO" ]; then
+  echo "No audio found (looked for rec_*.m4a in: $OUTPUT_DIR). Record something first." >&2
+  exit 1
+fi
+if [ ! -x "$PY" ]; then
+  echo "Python env missing — run setup/install.sh first." >&2
+  exit 1
+fi
+
+"$PY" "$ROOT/engine/transcribe.py" "$AUDIO" \
+  --out-dir "$OUTPUT_DIR" \
+  --model "$WHISPER_MODEL" \
+  --lang "$WHISPER_LANG"
