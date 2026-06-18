@@ -70,15 +70,41 @@ def hms(seconds):
     return f"{h:02d}:{m:02d}:{s:02d}"
 
 
-def transcribe_channel(wav, model, lang, label):
+def load_pcm(wav):
+    """Load a 16-bit mono WAV as (samples float32 in [-1,1], sample_rate)."""
+    import wave
+    import numpy as np
+
+    with wave.open(str(wav)) as w:
+        sr = w.getframerate()
+        raw = w.readframes(w.getnframes())
+    return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0, sr
+
+
+def transcribe_channel(wav, model, lang, label, no_speech_threshold=0.6, silence_dbfs=-50.0):
     import mlx_whisper
+    import numpy as np
 
     res = mlx_whisper.transcribe(
         str(wav), path_or_hf_repo=model, language=lang,
         condition_on_previous_text=False, verbose=False,
     )
+    samples, sr = load_pcm(wav)
     segs = []
     for s in res.get("segments", []):
+        # On a silent channel (e.g. while only the other side talks) Whisper
+        # hallucinates filler like "Thank you." — often with a *low* no_speech_prob,
+        # so the reliable tell is the audio itself being silent. Drop a segment if
+        # its actual RMS energy is below the silence floor, with no_speech_prob as a
+        # secondary guard for genuinely-uncertain output.
+        if float(s.get("no_speech_prob", 0.0)) >= no_speech_threshold:
+            continue
+        st, en = float(s["start"]), float(s["end"])
+        window = samples[int(st * sr): int(en * sr)]
+        if len(window):
+            dbfs = 20.0 * np.log10(float(np.sqrt((window ** 2).mean())) + 1e-12)
+            if dbfs < silence_dbfs:
+                continue
         txt = collapse_repeats((s.get("text") or "").strip())
         if txt:
             segs.append((float(s["start"]), label, txt))
@@ -93,6 +119,10 @@ def main():
     p.add_argument("--lang", default="en")
     p.add_argument("--label-left", default="Me")
     p.add_argument("--label-right", default="Them")
+    p.add_argument("--no-speech-threshold", type=float, default=0.6,
+                   help="drop segments whose no_speech_prob is >= this")
+    p.add_argument("--silence-dbfs", type=float, default=-50.0,
+                   help="drop segments whose audio RMS is below this dBFS (silence hallucinations)")
     args = p.parse_args()
 
     audio = Path(args.audio).expanduser()
@@ -112,14 +142,17 @@ def main():
             extract_channel(audio, 0, left)
             extract_channel(audio, 1, right)
             log(f"Transcribing left channel ({args.label_left})…")
-            segments += transcribe_channel(left, args.model, args.lang, args.label_left)
+            segments += transcribe_channel(left, args.model, args.lang, args.label_left,
+                                           args.no_speech_threshold, args.silence_dbfs)
             log(f"Transcribing right channel ({args.label_right})…")
-            segments += transcribe_channel(right, args.model, args.lang, args.label_right)
+            segments += transcribe_channel(right, args.model, args.lang, args.label_right,
+                                           args.no_speech_threshold, args.silence_dbfs)
         else:
             mono = td / "mono.wav"
             extract_channel(audio, 0, mono)
             log("Transcribing single channel…")
-            segments += transcribe_channel(mono, args.model, args.lang, args.label_left)
+            segments += transcribe_channel(mono, args.model, args.lang, args.label_left,
+                                           args.no_speech_threshold, args.silence_dbfs)
     dt = time.perf_counter() - t0
 
     segments.sort(key=lambda x: x[0])
