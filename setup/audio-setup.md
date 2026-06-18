@@ -32,12 +32,40 @@ The recorder maps channel 1 → left (**Me**) and channels 2–3 → right (**Th
 
 ### b) Multi-Output Device — name it exactly `Meeting Output`
 Tick:
-1. Your normal speakers/headphones (e.g. **MacBook Air Speakers**)
+1. **Headphones** (see the bleed warning below — strongly preferred over speakers)
 2. **BlackHole 2ch**
 
 This lets you still *hear* the call while its audio is mirrored into BlackHole for
 capture. The recorder switches your output to this device while recording and
 restores your previous output device when you stop.
+
+In Audio MIDI Setup, set the **Primary**/clock source to **BlackHole 2ch** and tick
+**Drift Correction** on the other member so the two stay in sync.
+
+> ⚠️ **Use headphones, not speakers.** If a member of `Meeting Output` is a *speaker*
+> that plays the call out loud, your built-in mic picks the far side back up
+> acoustically and it leaks into the **Me** (left) channel — Whisper is sensitive
+> enough to transcribe even faint bleed, so the far side gets mislabeled as you.
+> Listening on headphones eliminates this entirely (verified: with audio routed only
+> through BlackHole/headphones the mic channel sits at the −64 dB noise floor while
+> the system channel carries the call cleanly). Electrical channel separation in the
+> aggregate is perfect; the *only* cross-talk risk is acoustic echo from speakers.
+
+#### Switching between headphones and speakers
+The recorder always routes to whatever device is named by `MEETINGS_OUTPUT_DEVICE`
+(default `Meeting Output`). A Multi-Output Device only sends audio to the members that
+are *currently connected*, so:
+
+- **Headphones-only `Meeting Output` (recommended):** when your headphones are
+  connected you hear the call through them and the mic stays clean. When they're
+  *not* connected the device still feeds BlackHole (so capture keeps working) but you
+  hear nothing — a built-in reminder to plug them in before talking.
+- **Need speakers sometimes too?** Don't add the speakers to the same device (both
+  would play at once whenever both are present, reintroducing the bleed). Instead make
+  a *second* Multi-Output Device, e.g. `Meeting Output (Speakers)` = MacBook Air
+  Speakers + BlackHole 2ch, and switch by setting the workflow variable
+  `MEETINGS_OUTPUT_DEVICE` (Alfred → Configure Workflow, or export it in your shell)
+  to the device you want for that session.
 
 ## 3. Verify
 
