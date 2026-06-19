@@ -35,4 +35,6 @@ fi
 "$PY" "$ROOT/engine/transcribe.py" "$AUDIO" \
   --out-dir "$OUTPUT_DIR" \
   --model "$WHISPER_MODEL" \
-  --lang "$WHISPER_LANG"
+  --lang "$WHISPER_LANG" \
+  --diarize "$DIARIZE" \
+  --hf-token "$HF_TOKEN"

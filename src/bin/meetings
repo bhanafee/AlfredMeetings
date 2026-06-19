@@ -1,0 +1,82 @@
+#!/bin/bash
+# Single-entrypoint CLI for AlfredMeetings, callable from zsh:
+#
+#   meetings rec                              Toggle a stereo recording (run again to stop)
+#   meetings transcribe [audio]              Transcribe newest recording, or a file you pass
+#   meetings notes <mode> [transcript]       Process newest transcript, or one you pass
+#       mode: minutes | summary | clean | custom "<instruction>"
+#
+# Each subcommand delegates to the same bin/ scripts Alfred runs, so the repo stays the
+# single source of truth. install.sh symlinks this file into ~/.local/bin/meetings; we
+# resolve through that symlink (macOS has no `readlink -f`) to find the real bin dir.
+set -e
+
+# Resolve this script's physical path, following symlinks.
+src="${BASH_SOURCE[0]}"
+while [ -L "$src" ]; do
+  dir="$(cd -P "$(dirname "$src")" && pwd)"
+  src="$(readlink "$src")"
+  case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+done
+BIN="$(cd -P "$(dirname "$src")" && pwd)"   # .../src/bin
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: meetings <command> [args]
+
+  rec                              Toggle a stereo recording (run again to stop)
+  transcribe [audio]               Transcribe the newest recording, or a file you pass
+  notes <mode> [transcript]        Process the newest transcript, or one you pass
+                                   mode: minutes | summary | clean | custom "<instruction>"
+
+Examples:
+  meetings rec
+  meetings transcribe
+  meetings notes minutes
+  meetings notes custom "List risks and open questions"
+EOF
+}
+
+cmd="${1:-}"
+[ $# -gt 0 ] && shift || true
+
+case "$cmd" in
+  rec|record)
+    exec "$BIN/record.sh" "$@"
+    ;;
+  transcribe)
+    exec "$BIN/transcribe.sh" "$@"
+    ;;
+  notes)
+    mode="${1:-}"
+    [ $# -gt 0 ] && shift || true
+    case "$mode" in
+      minutes|summary|clean)
+        exec "$BIN/notes.sh" "$mode" "$@"
+        ;;
+      custom)
+        instruction="${1:-}"
+        if [ -z "$instruction" ]; then
+          echo "notes custom requires an instruction, e.g. meetings notes custom \"List risks\"" >&2
+          exit 1
+        fi
+        shift || true
+        export CUSTOM_PROMPT="$instruction"
+        exec "$BIN/notes.sh" custom "$@"
+        ;;
+      *)
+        echo "notes mode must be one of: minutes | summary | clean | custom" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+  ""|-h|--help|help)
+    usage
+    [ -z "$cmd" ] && exit 1 || exit 0
+    ;;
+  *)
+    echo "Unknown command: $cmd" >&2
+    usage
+    exit 1
+    ;;
+esac

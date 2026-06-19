@@ -11,7 +11,7 @@ mkdir -p "$DIST"
 rm -f "$DIST/$NAME"
 
 # Ensure scripts are executable inside the bundle.
-chmod +x "$SRC"/bin/*.sh 2>/dev/null || true
+chmod +x "$SRC"/bin/*.sh "$SRC"/bin/meetings 2>/dev/null || true
 
 ( cd "$SRC" && zip -r -X "$DIST/$NAME" . -x '.DS_Store' -x '*/__pycache__/*' >/dev/null )
 echo "Built $DIST/$NAME"

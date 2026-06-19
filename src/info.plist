@@ -541,6 +541,53 @@ First-time setup: run setup/install.sh (builds the Python venv) and follow setup
 			<key>config</key>
 			<dict>
 				<key>default</key>
+				<string>auto</string>
+				<key>pairs</key>
+				<array>
+					<array>
+						<string>Auto — label individual Them speakers when possible</string>
+						<string>auto</string>
+					</array>
+					<array>
+						<string>Off — one "Them" label</string>
+						<string>off</string>
+					</array>
+				</array>
+			</dict>
+			<key>description</key>
+			<string>Attribute individual remote speakers on the Them channel (Them 1, Them 2, …). Needs pyannote.audio (installed by setup/install.sh) and a Hugging Face token below; falls back to a single "Them" if unavailable.</string>
+			<key>label</key>
+			<string>Speaker labels (Them)</string>
+			<key>type</key>
+			<string>popupbutton</string>
+			<key>variable</key>
+			<string>MEETINGS_DIARIZE</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string></string>
+				<key>placeholder</key>
+				<string>hf_…</string>
+				<key>required</key>
+				<false/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string>Hugging Face token enabling per-speaker Them labels. Create one free, then accept the gated model at huggingface.co/pyannote/speaker-diarization-3.1. Leave blank to keep a single "Them" label.</string>
+			<key>label</key>
+			<string>Hugging Face token</string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>MEETINGS_HF_TOKEN</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
 				<string></string>
 				<key>placeholder</key>
 				<string>(set by Microphone choice)</string>
@@ -583,6 +630,10 @@ First-time setup: run setup/install.sh (builds the Python venv) and follow setup
 	<key>variables</key>
 	<dict>
 		<key>MEETINGS_CAPTURE_DEVICE</key>
+		<string></string>
+		<key>MEETINGS_DIARIZE</key>
+		<string>auto</string>
+		<key>MEETINGS_HF_TOKEN</key>
 		<string></string>
 		<key>MEETINGS_INPUT_SOURCE</key>
 		<string>auto</string>
