@@ -15,9 +15,11 @@ WHISPER_LANG="${MEETINGS_WHISPER_LANG:-en}"
 # DIARIZE=auto labels each remote speaker (Them 1, Them 2, …) when pyannote and a
 # Hugging Face token are available, and silently falls back to a single "Them"
 # otherwise; DIARIZE=off disables it. The token needs one-time acceptance of the
-# gated model at huggingface.co/pyannote/speaker-diarization-3.1 (see README).
+# gated model below at huggingface.co/<model> (see README). The default is the
+# pyannote.audio 4.x flagship pipeline; override if you pin a different version.
 DIARIZE="${MEETINGS_DIARIZE:-auto}"
 HF_TOKEN="${MEETINGS_HF_TOKEN:-}"
+DIARIZE_MODEL="${MEETINGS_DIARIZE_MODEL:-pyannote/speaker-diarization-community-1}"
 
 # --- Notes processing (local Ollama / any OpenAI-compatible endpoint) -------
 LLM_MODEL="${MEETINGS_LLM_MODEL:-qwen3:4b-instruct}"

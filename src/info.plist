@@ -576,7 +576,7 @@ First-time setup: run setup/install.sh (builds the Python venv) and follow setup
 				<true/>
 			</dict>
 			<key>description</key>
-			<string>Hugging Face token enabling per-speaker Them labels. Create one free, then accept the gated model at huggingface.co/pyannote/speaker-diarization-3.1. Leave blank to keep a single "Them" label.</string>
+			<string>Hugging Face token enabling per-speaker Them labels. Create one free, then accept the gated model at huggingface.co/pyannote/speaker-diarization-community-1. Leave blank to keep a single "Them" label.</string>
 			<key>label</key>
 			<string>Hugging Face token</string>
 			<key>type</key>

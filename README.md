@@ -121,14 +121,17 @@ system-audio channel, so to label them individually the transcriber runs
 `pyannote.audio` diarization on that channel and tags each voice `Them 1`, `Them 2`, …
 (the labels are plain text — search-and-replace them with real names afterward).
 
-This needs a free Hugging Face token and one-time access to the gated model:
+This needs a free Hugging Face token and one-time access to the gated model
+(`pyannote/speaker-diarization-community-1`, the pyannote.audio 4.x flagship pipeline):
 
-1. Create a token at <https://huggingface.co/settings/tokens>.
+1. Create a token at <https://huggingface.co/settings/tokens> (a **Read** token).
 2. Accept the model terms at
-   <https://huggingface.co/pyannote/speaker-diarization-3.1> (and the
-   `pyannote/segmentation-3.0` model it depends on).
+   <https://huggingface.co/pyannote/speaker-diarization-community-1>.
 3. Set the token: Alfred → **Configure Workflow → Hugging Face token**, or export
    `MEETINGS_HF_TOKEN` in your shell.
+
+Override the pipeline with `MEETINGS_DIARIZE_MODEL` if you pin a different pyannote
+version (e.g. `pyannote/speaker-diarization-3.1` under pyannote.audio 3.x).
 
 If the token, model access, or `pyannote.audio` is missing, transcription **falls back
 to a single `Them` label** — nothing breaks, you just lose the per-speaker split. Set

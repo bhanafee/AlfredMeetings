@@ -112,7 +112,7 @@ def transcribe_channel(wav, model, lang, no_speech_threshold=0.6, silence_dbfs=-
     return segs
 
 
-def diarize_turns(wav, hf_token):
+def diarize_turns(wav, hf_token, model="pyannote/speaker-diarization-community-1"):
     """Speaker-diarize one channel -> list of (start, end, speaker_id), or None.
 
     Returns None (and logs why) on any problem — missing pyannote/torch, no token,
@@ -130,9 +130,7 @@ def diarize_turns(wav, hf_token):
         log("Diarization off (no MEETINGS_HF_TOKEN set). Using a single label.")
         return None
     try:
-        pipeline = Pipeline.from_pretrained(
-            "pyannote/speaker-diarization-3.1", token=hf_token
-        )
+        pipeline = Pipeline.from_pretrained(model, token=hf_token)
     except Exception as e:
         log(f"Diarization off (model unavailable — token/gated-access? {e}). Single label.")
         return None
@@ -203,6 +201,8 @@ def main():
                    help="auto = label individual Them speakers when pyannote+token available")
     p.add_argument("--hf-token", default="",
                    help="Hugging Face token for the pyannote diarization model")
+    p.add_argument("--diarize-model", default="pyannote/speaker-diarization-community-1",
+                   help="pyannote pipeline repo for diarization (4.x flagship by default)")
     args = p.parse_args()
 
     audio = Path(args.audio).expanduser()
@@ -233,7 +233,7 @@ def main():
             turns = None
             if args.diarize == "auto" and right_segs:
                 log("Diarizing the Them channel for individual speakers…")
-                turns = diarize_turns(right, args.hf_token)
+                turns = diarize_turns(right, args.hf_token, args.diarize_model)
             labelled, speaker_count = label_right_segments(right_segs, turns, args.label_right)
             segments += labelled
             if speaker_count:

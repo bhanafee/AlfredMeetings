@@ -22,7 +22,7 @@ echo ">>> Installing pyannote.audio for per-speaker Them labels (pulls PyTorch)â
 # Diarization is optional at runtime (transcribe falls back to a single "Them" if it or
 # the HF token is missing), but installing it here makes the feature available. After
 # this, create a free Hugging Face token, accept the gated model at
-# huggingface.co/pyannote/speaker-diarization-3.1, and set MEETINGS_HF_TOKEN.
+# huggingface.co/pyannote/speaker-diarization-community-1, and set MEETINGS_HF_TOKEN.
 "$VENV/bin/pip" install --quiet pyannote.audio || \
   echo "  WARNING: pyannote.audio install failed â€” Them-side speaker labels will be off."
 

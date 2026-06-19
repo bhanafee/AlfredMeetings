@@ -37,4 +37,5 @@ fi
   --model "$WHISPER_MODEL" \
   --lang "$WHISPER_LANG" \
   --diarize "$DIARIZE" \
-  --hf-token "$HF_TOKEN"
+  --hf-token "$HF_TOKEN" \
+  --diarize-model "$DIARIZE_MODEL"
