@@ -11,6 +11,16 @@ OUTPUT_DIR="${MEETINGS_OUTPUT_DIR:-$HOME/Desktop/Meeting Notes}"
 WHISPER_MODEL="${MEETINGS_WHISPER_MODEL:-mlx-community/whisper-large-v3-turbo}"
 WHISPER_LANG="${MEETINGS_WHISPER_LANG:-en}"
 
+# --- Speaker attribution on the "Them" channel (pyannote.audio) -------------
+# DIARIZE=auto labels each remote speaker (Them 1, Them 2, …) when pyannote and a
+# Hugging Face token are available, and silently falls back to a single "Them"
+# otherwise; DIARIZE=off disables it. The token needs one-time acceptance of the
+# gated model below at huggingface.co/<model> (see README). The default is the
+# pyannote.audio 4.x flagship pipeline; override if you pin a different version.
+DIARIZE="${MEETINGS_DIARIZE:-auto}"
+HF_TOKEN="${MEETINGS_HF_TOKEN:-}"
+DIARIZE_MODEL="${MEETINGS_DIARIZE_MODEL:-pyannote/speaker-diarization-community-1}"
+
 # --- Notes processing (local Ollama / any OpenAI-compatible endpoint) -------
 LLM_MODEL="${MEETINGS_LLM_MODEL:-qwen3:4b-instruct}"
 LLM_BASE_URL="${MEETINGS_LLM_BASE_URL:-http://localhost:11434/v1}"
@@ -96,3 +106,7 @@ MIC_FFMPEG="${MEETINGS_MIC_FFMPEG:-$SUPPORT/MicCapture.app/Contents/MacOS/ffmpeg
 # process. Running the binary directly under Alfred makes *Alfred* responsible, and
 # Alfred has no NSMicrophoneUsageDescription, so macOS aborts the capture (SIGABRT).
 MIC_APP="${MEETINGS_MIC_APP:-$SUPPORT/MicCapture.app}"
+
+# Menu-bar "recording now" indicator (a native status-bar app built by install.sh).
+# record.sh launches it on start and kills it on stop; missing is non-fatal.
+INDICATOR_APP="${MEETINGS_INDICATOR_APP:-$SUPPORT/RecIndicator.app}"

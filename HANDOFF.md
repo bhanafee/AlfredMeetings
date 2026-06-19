@@ -86,6 +86,54 @@ re-approved once.
   + `install.sh`, so the venv and wrapper resolve the same whether you or Alfred runs
   the scripts.
 
+## New in this pass (CLI + indicator + Them speakers) — built, NOT yet live-verified
+Three additions, all code-complete and syntax/compile/lint-checked, but none exercised
+end-to-end on hardware yet (needs a live take + a fresh `install.sh`):
+- **Standalone `meetings` CLI** (`src/bin/meetings`, extensionless): one dispatcher →
+  `meetings rec | transcribe [file] | notes <minutes|summary|clean|custom "…"> [file]`.
+  Resolves its own path through symlinks, then calls the same `bin/*.sh` Alfred runs.
+  `install.sh` symlinks it into `~/.local/bin` (already on PATH). `build.sh` now also
+  `chmod +x`'s it. The Alfred-only `notes_filter/notes_run` are untouched.
+- **Menu-bar recording indicator** (`src/indicator/RecIndicator.swift`): a native
+  `NSStatusBar` accessory app (LSUIElement, no Dock icon) showing a blinking red ●
+  with a "Stop recording" item. `record.sh` launches it via `open -n -a … --args
+  --stamp <stamp> --stop <record.sh>` after a confirmed start, and kills it on stop via
+  `pkill -f "RecIndicator.app.*$stamp"` (stamp = audio basename minus `rec_`/`.m4a`).
+  Built + ad-hoc-signed by `install.sh` exactly like `MicCapture.app` (swiftc verified
+  present at `/usr/bin/swiftc`; compiles clean). `INDICATOR_APP` added to `config.sh`;
+  guarded so a missing app never blocks recording.
+- **Per-speaker Them labels** (`pyannote.audio` 4.0.4): `transcribe.py` runs diarization
+  on the **right channel only** and maps each silence-gated Whisper segment to the
+  max-overlap speaker → `Them 1`, `Them 2`, … (Me unchanged). New helpers
+  `diarize_turns` / `speaker_for` / `label_right_segments`; `transcribe_channel` now
+  returns `(start,end,text)` and the caller applies labels. **Graceful fallback**: no
+  pyannote/torch, no HF credential, gated-model denial, or any runtime error → logs a
+  warning and keeps the single `"Them"` label (transcribe never hard-fails). `DIARIZE`/
+  `HF_TOKEN`/`DIARIZE_MODEL` in `config.sh`, passed via `transcribe.sh`; Alfred config
+  fields (Speaker labels popup + HF token) in `info.plist` (plutil clean). `install.sh`
+  now also `pip install pyannote.audio`.
+  - **pyannote 4.x gotchas (all handled — see commits a7ced63, f7a109e, 4806926):**
+    (1) auth kwarg is `token=`, not `use_auth_token=`; (2) the real gated repo is
+    **`pyannote/speaker-diarization-community-1`** (4.x flagship) — even loading the old
+    `speaker-diarization-3.1` id pulls community-1's PLDA, so that is the repo to accept
+    (NOT segmentation-3.0 / diarization-3.1). We default to community-1, overridable via
+    `MEETINGS_DIARIZE_MODEL`. (3) The pipeline returns a `DiarizeOutput`, not an
+    `Annotation`; we read `.exclusive_speaker_diarization` (non-overlapping, built for
+    transcription) and fall back to `.speaker_diarization` / a legacy `Annotation`.
+    (4) Credential: `MEETINGS_HF_TOKEN` if set, else `huggingface_hub.get_token()`
+    (cached `hf auth login` / `HF_TOKEN` env) — the user authed via a cached login, no
+    env var.
+  - **Verified live (plumbing):** `meetings transcribe` on `rec_2026-06-18_15-42-37.m4a`
+    ran clean via the symlinked CLI; `diarize_turns` with an empty token resolved the
+    cached login, loaded community-1, ran, and extracted a speaker turn. That clip is a
+    **solo (Me-only)** take, so 2-speaker `Them 1/2` output is the one thing still
+    needing a real multi-remote-speaker take (mapping logic itself unit-tested).
+
+To finish: a live `meetings rec` for the menu-bar ● (announce devices first), and a
+two-remote-speaker take to see `Them 1/2`. Repackage already done (`./build.sh`); still
+need reimport + restart Alfred so the new info.plist config fields load. Branch:
+`feature/cli-indicator-them-speakers` (not merged).
+
 ## Remaining work
 - **`rec` from Alfred:** ✅ done (prompt → Allow once → records; verified).
 - **Auto-transcribe chain (`rec` stop → transcript):** wired + logic-verified (guard

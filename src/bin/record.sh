@@ -36,6 +36,9 @@ stop_recording() {
   if [ -n "$base" ]; then
     pkill -INT -f "$base" 2>/dev/null || true        # SIGINT lets ffmpeg finalize the m4a
     for _ in $(seq 1 30); do [ -z "$(rec_pids "$base")" ] && break; sleep 0.5; done
+    # Dismiss the menu-bar indicator for this take (stamp = base minus rec_ / .m4a).
+    local stamp="${base#rec_}"; stamp="${stamp%.m4a}"
+    [ -n "$stamp" ] && pkill -f "RecIndicator.app.*$stamp" 2>/dev/null || true
   fi
   [ -n "$orig" ] && SwitchAudioSource -t output -s "$orig" >/dev/null 2>&1 || true
   rm -f "$STATEFILE"
@@ -77,6 +80,11 @@ start_recording() {
     rm -f "$STATEFILE"
     echo "❌ Recorder didn't start. If macOS shows a mic prompt for 'AlfredMeetings Mic Capture', click Allow, then run rec again." >&2
     exit 1
+  fi
+  # Show the menu-bar "recording now" indicator (best-effort; never blocks recording).
+  # The stamp is passed so stop_recording can find/kill this app by argv match.
+  if [ -d "$INDICATOR_APP" ]; then
+    open -n -a "$INDICATOR_APP" --args --stamp "$stamp" --stop "$ROOT/bin/record.sh" >/dev/null 2>&1 || true
   fi
   echo "🔴 Recording… (if macOS asks, allow mic access for AlfredMeetings Mic Capture). Run 'rec' again to stop."
 }
