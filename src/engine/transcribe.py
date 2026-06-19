@@ -126,11 +126,22 @@ def diarize_turns(wav, hf_token, model="pyannote/speaker-diarization-community-1
     except Exception as e:
         log(f"Diarization off (pyannote.audio not installed: {e}). Using a single label.")
         return None
-    if not hf_token:
-        log("Diarization off (no MEETINGS_HF_TOKEN set). Using a single label.")
+    # Prefer MEETINGS_HF_TOKEN; fall back to a cached `huggingface-cli login` or the
+    # HF_TOKEN / HUGGING_FACE_HUB_TOKEN env vars (get_token resolves all of these).
+    token = hf_token or None
+    if not token:
+        try:
+            from huggingface_hub import get_token
+
+            token = get_token()
+        except Exception:
+            token = None
+    if not token:
+        log("Diarization off (no HF credential — set MEETINGS_HF_TOKEN or run "
+            "huggingface-cli login). Using a single label.")
         return None
     try:
-        pipeline = Pipeline.from_pretrained(model, token=hf_token)
+        pipeline = Pipeline.from_pretrained(model, token=token)
     except Exception as e:
         log(f"Diarization off (model unavailable — token/gated-access? {e}). Single label.")
         return None
@@ -149,8 +160,14 @@ def diarize_turns(wav, hf_token, model="pyannote/speaker-diarization-community-1
     except Exception as e:
         log(f"Diarization failed at runtime ({e}). Using a single label.")
         return None
-    turns = [(float(t.start), float(t.end), spk)
-             for t, _, spk in diary.itertracks(yield_label=True)]
+    # pyannote 4.x returns a DiarizeOutput; its exclusive_speaker_diarization is the
+    # non-overlapping track built for downstream transcription (ideal for per-segment
+    # attribution). Older/legacy versions return an Annotation directly.
+    ann = getattr(diary, "exclusive_speaker_diarization", None)
+    if ann is None:
+        ann = getattr(diary, "speaker_diarization", diary)
+    turns = [(float(seg.start), float(seg.end), spk)
+             for seg, _, spk in ann.itertracks(yield_label=True)]
     return turns or None
 
 
