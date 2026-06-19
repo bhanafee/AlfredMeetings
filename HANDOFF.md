@@ -102,25 +102,37 @@ end-to-end on hardware yet (needs a live take + a fresh `install.sh`):
   Built + ad-hoc-signed by `install.sh` exactly like `MicCapture.app` (swiftc verified
   present at `/usr/bin/swiftc`; compiles clean). `INDICATOR_APP` added to `config.sh`;
   guarded so a missing app never blocks recording.
-- **Per-speaker Them labels** (`pyannote.audio`): `transcribe.py` now runs diarization
+- **Per-speaker Them labels** (`pyannote.audio` 4.0.4): `transcribe.py` runs diarization
   on the **right channel only** and maps each silence-gated Whisper segment to the
   max-overlap speaker → `Them 1`, `Them 2`, … (Me unchanged). New helpers
   `diarize_turns` / `speaker_for` / `label_right_segments`; `transcribe_channel` now
   returns `(start,end,text)` and the caller applies labels. **Graceful fallback**: no
-  pyannote/torch, no `MEETINGS_HF_TOKEN`, gated-model denial, or any runtime error →
-  logs a warning and keeps the single `"Them"` label (transcribe never hard-fails on
-  diarization). `DIARIZE`/`HF_TOKEN` in `config.sh`, passed via `transcribe.sh`; Alfred
-  config fields (Speaker labels popup + HF token) added to `info.plist` (plutil clean).
-  `install.sh` now also `pip install pyannote.audio`.
-  **HF setup needed before it labels anyone:** create a token, accept the gated model at
-  huggingface.co/pyannote/speaker-diarization-3.1 (+ pyannote/segmentation-3.0), set the
-  token. The user said they'd set up the HF account.
+  pyannote/torch, no HF credential, gated-model denial, or any runtime error → logs a
+  warning and keeps the single `"Them"` label (transcribe never hard-fails). `DIARIZE`/
+  `HF_TOKEN`/`DIARIZE_MODEL` in `config.sh`, passed via `transcribe.sh`; Alfred config
+  fields (Speaker labels popup + HF token) in `info.plist` (plutil clean). `install.sh`
+  now also `pip install pyannote.audio`.
+  - **pyannote 4.x gotchas (all handled — see commits a7ced63, f7a109e, 4806926):**
+    (1) auth kwarg is `token=`, not `use_auth_token=`; (2) the real gated repo is
+    **`pyannote/speaker-diarization-community-1`** (4.x flagship) — even loading the old
+    `speaker-diarization-3.1` id pulls community-1's PLDA, so that is the repo to accept
+    (NOT segmentation-3.0 / diarization-3.1). We default to community-1, overridable via
+    `MEETINGS_DIARIZE_MODEL`. (3) The pipeline returns a `DiarizeOutput`, not an
+    `Annotation`; we read `.exclusive_speaker_diarization` (non-overlapping, built for
+    transcription) and fall back to `.speaker_diarization` / a legacy `Annotation`.
+    (4) Credential: `MEETINGS_HF_TOKEN` if set, else `huggingface_hub.get_token()`
+    (cached `hf auth login` / `HF_TOKEN` env) — the user authed via a cached login, no
+    env var.
+  - **Verified live (plumbing):** `meetings transcribe` on `rec_2026-06-18_15-42-37.m4a`
+    ran clean via the symlinked CLI; `diarize_turns` with an empty token resolved the
+    cached login, loaded community-1, ran, and extracted a speaker turn. That clip is a
+    **solo (Me-only)** take, so 2-speaker `Them 1/2` output is the one thing still
+    needing a real multi-remote-speaker take (mapping logic itself unit-tested).
 
-To finish: run `setup/install.sh` from scratch (adds pyannote ~PyTorch, builds
-`RecIndicator.app`, symlinks `meetings`), then verify per README/plan — `meetings
-transcribe` an existing rec; a live `meetings rec` for the menu-bar ●; a two-remote-
-speaker clip for `Them 1/2`; and confirm fallback with the token unset. Repackage with
-`./build.sh` + reimport + restart Alfred (info.plist changed).
+To finish: a live `meetings rec` for the menu-bar ● (announce devices first), and a
+two-remote-speaker take to see `Them 1/2`. Repackage already done (`./build.sh`); still
+need reimport + restart Alfred so the new info.plist config fields load. Branch:
+`feature/cli-indicator-them-speakers` (not merged).
 
 ## Remaining work
 - **`rec` from Alfred:** ✅ done (prompt → Allow once → records; verified).
