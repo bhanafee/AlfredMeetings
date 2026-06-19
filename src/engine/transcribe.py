@@ -131,10 +131,13 @@ def diarize_turns(wav, hf_token):
         return None
     try:
         pipeline = Pipeline.from_pretrained(
-            "pyannote/speaker-diarization-3.1", use_auth_token=hf_token
+            "pyannote/speaker-diarization-3.1", token=hf_token
         )
     except Exception as e:
         log(f"Diarization off (model unavailable — token/gated-access? {e}). Single label.")
+        return None
+    if pipeline is None:  # pyannote returns None when gated-model access isn't granted
+        log("Diarization off (model access not granted — accept the gated model). Single label.")
         return None
     # CPU by default for reliability; set MEETINGS_DIARIZE_DEVICE=mps to try the GPU.
     try:
