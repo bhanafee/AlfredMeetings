@@ -266,9 +266,13 @@ need reimport + restart Alfred so the new info.plist config fields load. Branch:
   Cause: the Core Audio daemon got into a bad state — confirmed triggers are tearing down a
   HAL driver (e.g. **uninstalling BlackHole**) and many process-tap create/destroy cycles
   (heavy debugging). It is **not** a permission, mic, or code defect. **Fix:**
-  `sudo killall coreaudiod` (a reboot also works, but is overkill). This account is
-  unprivileged, so **ask the user to run the `sudo` in a separate terminal** — Claude can't
-  sudo in-session. After the restart, capture confirms its start on the first attempt again.
+  `sudo killall coreaudiod` for the *churn* case clears it. **But after a HAL driver removal
+  (uninstalling BlackHole), `killall` is UNRELIABLE** — observed 2026-06-22: post-uninstall it
+  bought one good record/stop cycle, then re-wedged; a second `killall` (daemon confirmed
+  restarted, uptime 40s) bought *zero* cycles. **A full reboot is the reliable fix** there
+  (post-reboot the tap ran across many cycles). This account is unprivileged, so **ask the
+  user to run the `sudo`/reboot** — Claude can't sudo in-session. Prefer reboot after a
+  driver uninstall; reserve `killall` for the create/destroy-churn case.
 - **Device quality**: Bluetooth mic forces SCO → low-quality *listening* for the whole
   call (transcription is fine, Whisper targets 16 kHz). Jabra (USB) does **not** drop
   its output when its mic opens (verified). Speakers-as-output causes acoustic bleed
