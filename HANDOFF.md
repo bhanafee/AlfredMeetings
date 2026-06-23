@@ -1,5 +1,93 @@
 # Handoff — AlfredMeetings
 
+> **2026-06-22 (post-reboot) — RESOLVED: the tap stall was transient `coreaudiod`
+> corruption, and the menu-bar indicator leak is fixed. Branch
+> `feature/coreaudio-tap-capture`, still NOT merged.**
+>
+> **Tap stall → resolved.** After the reboot + a clean `setup/install.sh` rebuild, the
+> Core Audio process tap confirms its start on the *first* IOProc attempt (no retries)
+> and records valid stereo m4a — Me on the mic (left), Them on the tap (right). The
+> "ZERO IOProc callbacks" failure documented below was transient `coreaudiod` corruption
+> from the many create/destroy cycles during debugging, not a defect in the tap. The
+> diagnostic stash (`--no-tap` etc.) was dropped; the committed source is the working one.
+>
+> **Menu-bar indicator leak → fixed (`src/bin/record.sh`).** Root cause: `record.sh`
+> confirmed start by *process existence* (a ~3.6s wait), but `MeetingCapture` spends up to
+> 4.5s in its `startConfirmed()` retry loop before it logs `recording (start confirmed)`
+> or `FAIL`. So the indicator was launched *before* confirmation; on a failed start it was
+> orphaned, and the next `rec` took the start branch (process already gone) without killing
+> it → indicators accumulated in the menu bar. Fix: start now (1) truncates the per-run
+> capture log and polls it for the real `recording (start confirmed)` marker before
+> launching the indicator (bails on `FAIL`/`FATAL` or a 10s ceiling), (2) `pkill`s any
+> surviving `RecIndicator.app` on the start path (none should exist when idle), and
+> (3) stops a hung capture + clears state on a failed start. Verified end-to-end:
+> start → exactly one indicator + one capture → stop → finalized m4a, all procs/state cleared.
+>
+> **Still unverified:** a real two-speaker take (far-side audio) for the Me/Them split and
+> `Them 1/2` diarization — needs a live call or a two-voice clip played through system audio.
+>
+> <details><summary>Original (now-superseded) reboot finding — kept for history</summary>
+>
+> **Critical finding (isolated with a diagnostic build):** the Core Audio process tap
+> does not deliver IOProc callbacks, so `MeetingCapture` never starts recording. Proven
+> by an isolation test (`--no-tap`):
+> - **Mic-only aggregate** → WORKS: `AudioDeviceStart` OSStatus 0, IOProc fires, recorded
+>   20.1s, Me −11.0 dBFS, mic attaches as sub-device (id 99).
+> - **Mic + global process tap** → STALLS: tap creates OK (id 151), mic attaches,
+>   `AudioDeviceStart` returns OSStatus 0, but **ZERO IOProc callbacks for a full 10s** →
+>   `FAIL: capture never started`.
+> - Conclusion: the defect is the **process tap in the aggregate's `kAudioAggregateDeviceTapListKey`**
+>   wedging the device. It is **NOT** a permission or timing issue — the mic grant, the
+>   mic-clocked aggregate, the IOProc, and the AAC m4a writer are all proven working.
+>   (Every "no IOProc callback" failure earlier in the session was this same tap stall.)
+>
+> **State at handoff (clean slate, pre-reboot):**
+> - Removed `MeetingCapture.app`, `RecIndicator.app`, `MicCapture.app` from
+>   `~/Library/Application Support/AlfredMeetings/`. **`venv` kept** (unrelated to the bug;
+>   rebuilding re-downloads GBs).
+> - TCC mic grants: apps deleted, so `tccutil reset <id>` returns "no such bundle id"; the
+>   stale Microphone entries (MeetingCapture / MicCapture / MicTapMerge) **flush on reboot**.
+> - **Diagnostic source edits are STASHED** — `git stash` entry *"diagnostic capture edits
+>   (--no-tap, 10s window, extra logging)"*. Working tree = committed branch source (verified,
+>   no `--no-tap`). The harness adds to `MeetingCapture.swift`: a `--no-tap` flag (mic-only
+>   aggregate), a single 10s start window (vs committed 3×1.5s) with per-second
+>   "waiting for callback" logging, `AudioDeviceStart` OSStatus logging instead of `fail()`,
+>   and a log of the aggregate's active sub-device list.
+> - Cleared all logs, `recording.state`, and `diag_*.m4a`.
+> - `.claude/settings.local.json` (gitignored) gained allow-rules this session: relative
+>   `bash setup/devtest.sh`, `transcribe.sh`, `ffprobe`/`ffmpeg`, `pgrep`/`cat`/`tail`/`ls`/`stat`.
+>
+> **macOS gotcha discovered:** re-signing an ad-hoc app **in place** (`swiftc` over an
+> existing bundle + `codesign --force`) made macOS treat it as *damaged* and **delete the
+> `.app` on next `open`**. Always rebuild the bundle **from scratch** (`rm -rf` → `mkdir` →
+> compile → write Info.plist → `codesign`), exactly as `setup/install.sh` does. Env: macOS
+> Darwin 27.0.0; `swiftc` at `/usr/bin/swiftc`; Ollama up; auto-mic = `MacBook Air Microphone`
+> (no Jabra/Bluetooth connected).
+>
+> **POST-REBOOT PLAN:**
+> 1. **Clean build:** run `setup/install.sh` (rebuilds + signs `MeetingCapture.app` and
+>    `RecIndicator.app` from committed source; venv present so pip steps are fast).
+> 2. **Test capture:** `bash setup/devtest.sh start builtin` → expect a macOS mic prompt for
+>    "AlfredMeetings Capture" → **Allow**. The committed start window is only 4.5s (3×1.5s),
+>    shorter than a prompt response, so the first run primes the grant — then run it again.
+>    Check `~/Library/Application Support/AlfredMeetings/MeetingCapture.log`.
+> 3. **Branch:**
+>    - **If capture now works** → the tap stall was transient `coreaudiod` corruption from
+>      our many create/destroy cycles; proceed with the original live verification (record a
+>      two-speaker take → stop → transcribe Me/Them → optional Alfred GUI run).
+>    - **If the tap still stalls** → genuine defect. Restore the harness (`git stash pop`),
+>      rebuild from scratch, and investigate WHY the tap wedges the aggregate. Candidates:
+>      (a) the global tap needs a separate start / its own permission on macOS 26;
+>      (b) `kAudioAggregateDeviceTapAutoStartKey` + per-tap drift compensation interaction;
+>      (c) try a per-PID tap (`--pid`) instead of the global tap;
+>      (d) inspect Console/`log stream` for `coreaudiod` errors during the stall.
+>      **Diff the committed `MeetingCapture.swift` against the proven-working spike** on
+>      branch `spike/system-audio-tap` (`src/spike/`) to find what diverged and broke the tap.
+>
+> </details>
+>
+> ---
+>
 > **2026-06-22 — BlackHole replaced by a Core Audio process tap (branch
 > `feature/coreaudio-tap-capture`, NOT merged; needs live verification).**
 > Recording no longer uses BlackHole or Audio MIDI Setup. `record.sh` now launches
