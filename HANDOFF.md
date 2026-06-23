@@ -1,8 +1,54 @@
 # Handoff — AlfredMeetings
 
-> **2026-06-22 (post-reboot session) — RESOLVED: the real bug was a missing macOS-26/27
-> system-audio TCC grant, and the two-speaker test now PASSES.** Branch
-> `feature/coreaudio-tap-capture`, still NOT merged. The whole "no IOProc callback / Them
+> **2026-06-22 (end of session) — WORKING END-TO-END THROUGH THE ALFRED GUI. Resume
+> tomorrow with ONE polish task (record.sh first-run prompt timeout), then merge.** Branch
+> `feature/coreaudio-tap-capture`, NOT merged. Last 3 commits are this session's fixes
+> (`fc96110` silence-start + TCC crash, `2c78ff8` system-audio TCC grant). Working tree
+> clean; workflow repackaged (`dist/AlfredMeetings.alfredworkflow`); state clean (no orphan
+> procs, no recording.state, volume 19, no stray rec_*.m4a). System-audio grant IS in place
+> on this machine (`preflight == 0`).
+>
+> **What works now (user-verified in the Alfred GUI this session):** `rec` start → stop →
+> saved `rec_*.m4a` → auto-transcript with Me/Them. Headless this session also verified the
+> two-speaker `Them 1`/`Them 2` diarization split (Daniel/Samantha, 6/6 lines) and that the
+> capture starts in SILENCE (rec before anyone talks) with the tap filling Them once audio
+> appears.
+>
+> **THE ONE REMAINING TASK (tomorrow): record.sh first-run prompt timeout.**
+> On a CLEAN machine (no grant yet), the first `rec` makes MeetingCapture show the System
+> Audio Recording prompt and wait up to 120s for it — but `record.sh` only polls ~10s for
+> "recording (start confirmed)" then kills the capture (orphaning the prompt). It's a
+> one-time prime (like the mic grant), but the UX is poor. Fix in `src/bin/record.sh` around
+> the confirm loop (verified line numbers today):
+>   - **L94:** `for _ in $(seq 1 40); do … sleep 0.25` = the ~10s ceiling.
+>   - **L95–97:** greps `MeetingCapture.log` for `recording (start confirmed)` / `^(FAIL|FATAL):`.
+>   - **L100–103:** on no-confirm it `pkill -INT`s the capture and prints "click Allow … mic prompt".
+>   Plan: when the log shows MeetingCapture's line `requesting System Audio Recording
+>   permission` (it logs exactly that), EXTEND the ceiling (e.g. to ~125s) so the user can
+>   click Allow, and update the failure/echo message to mention **System Audio Recording**
+>   (not just the mic). Then on a clean machine: first `rec` prompts → Allow → it records;
+>   subsequent runs `preflight == 0`, no wait. Re-test the normal (already-granted) path too
+>   so the common case still confirms in ~1s.
+>
+> **After that:** repackage (`./build.sh`) if record.sh changed, reimport into Alfred, one
+> more GUI `rec` to confirm, then MERGE `feature/coreaudio-tap-capture`.
+>
+> **Key facts for the fix (don't re-derive):**
+>   - Capture app runs from `~/Library/Application Support/AlfredMeetings/MeetingCapture.app`
+>     (path pinned in config.sh), NOT the workflow bundle — so rebuilding it via install.sh's
+>     block takes effect for Alfred immediately (no reimport needed for app-only changes).
+>   - Rebuilding the app changes its cdhash → TCC re-confirms the existing grant WITHOUT a
+>     visible prompt (observed: preflight=2 → request → "GRANTED" instantly). So routine
+>     rebuilds don't re-prompt; only a never-granted machine does.
+>   - `ensureSystemAudioCaptureAuthorized()` in MeetingCapture.swift gates the tap; the
+>     three required pieces (Info.plist `NSAudioCaptureUsageDescription`, private
+>     `TCCAccessRequest("kTCCServiceAudioCapture")`, active NSApplication) are all in place.
+>   - `kAudioAggregateDeviceTapAutoStartKey` MUST stay `false` (true => no start in silence).
+>
+> <details><summary>Earlier same-session detail: the system-audio TCC root cause (still true)</summary>
+>
+> **2026-06-22 — RESOLVED: the real bug was a missing macOS-26/27
+> system-audio TCC grant.** The whole "no IOProc callback / Them
 > is silent" saga was never coreaudiod corruption or a tap-code defect — it was the
 > system-audio-capture permission. On macOS 14.4+ (this machine is **macOS 27.0**, build
 > 26A5353q) a Core Audio process tap is gated by the **`kTCCServiceAudioCapture`** TCC
@@ -44,6 +90,8 @@
 > capture app; a real call through the Alfred GUI; then merge. coreaudiod note below about
 > "killall after BlackHole removal / reboot" stands but was a RED HERRING for this bug —
 > the failures were the missing grant + capturing in silence, not a wedge.
+>
+> </details>
 >
 > ---
 >
