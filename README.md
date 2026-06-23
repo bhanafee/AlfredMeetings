@@ -21,10 +21,11 @@ While a recording is active, a red ● appears in the **menu bar** — click it 
 
 ## How it works
 
-- **Recording** captures an aggregate input device (mic + BlackHole) and pans it to
-  a stereo file: mic on the left, system audio on the right. While recording, output
-  is routed through a multi-output device so you still hear the call; your previous
-  output device is restored when you stop.
+- **Recording** captures a stereo file with your mic on the left and the far side on
+  the right, using a **Core Audio process tap** clocked by the microphone — no BlackHole
+  and no Audio MIDI Setup. Your output device and volume are left untouched (nothing is
+  rerouted), and the tap can optionally be scoped to a single app. See
+  [ADR 0001](docs/adr/0001-system-audio-capture-via-core-audio-process-tap.md).
 - **Transcription** splits the stereo file into two mono channels, transcribes each
   independently with [`mlx-whisper`](https://github.com/ml-explore/mlx-examples)
   (`whisper-large-v3-turbo`), and merges the segments chronologically with `Me` /
@@ -43,9 +44,11 @@ While a recording is active, a red ● appears in the **menu bar** — click it 
 
 ```sh
 brew install ffmpeg switchaudio-osx
-brew install --cask blackhole-2ch        # reboot afterwards
 brew install --cask ollama
 ```
+
+(No BlackHole needed — the far side is captured with a Core Audio process tap. If you
+installed `blackhole-2ch` for an earlier version, it's now unused and safe to remove.)
 
 Then start Ollama and pull the model:
 
@@ -61,23 +64,20 @@ ollama pull qwen3:4b-instruct
 ```
 
 Creates a venv at `~/Library/Application Support/AlfredMeetings/venv` and installs
-`mlx-whisper` + `openai` + `pyannote.audio`, builds the menu-bar recording indicator,
-and symlinks the `meetings` CLI into `~/.local/bin`. (No Homebrew needed for this step.)
+`mlx-whisper` + `openai` + `pyannote.audio`, builds the signed **capture helper**
+(`MeetingCapture.app`) and menu-bar recording indicator, and symlinks the `meetings`
+CLI into `~/.local/bin`. (Needs Xcode Command Line Tools for `swiftc`; no Homebrew.)
 
-### 3. Audio devices
-
-Follow [`setup/audio-setup.md`](setup/audio-setup.md) to create the `Meeting Capture`
-(aggregate input) and `Meeting Output` (multi-output) devices in Audio MIDI Setup.
-
-### 4. Install the workflow
+### 3. Install the workflow
 
 ```sh
 ./build.sh                      # produces dist/AlfredMeetings.alfredworkflow
 open dist/AlfredMeetings.alfredworkflow
 ```
 
-The first `transcribe` run downloads the Whisper model (~1.5 GB, one time). The
-recorder needs microphone permission — macOS will prompt on first use.
+There are **no audio devices to configure** — recording uses a process tap. The first
+`rec` prompts once for **Microphone** access (the tap is gated by the Microphone service);
+click Allow. The first `transcribe` run downloads the Whisper model (~1.5 GB, one time).
 
 ## Configuration
 
@@ -91,8 +91,8 @@ by an environment variable. The most common ones are also exposed in Alfred's
 | `MEETINGS_LLM_MODEL` | `qwen3:4b-instruct` |
 | `MEETINGS_LLM_BASE_URL` | `http://localhost:11434/v1` |
 | `MEETINGS_WHISPER_MODEL` | `mlx-community/whisper-large-v3-turbo` |
-| `MEETINGS_CAPTURE_DEVICE` | `Meeting Capture` |
-| `MEETINGS_OUTPUT_DEVICE` | `Meeting Output` |
+| `MEETINGS_MIC_DEVICE` | _(from Microphone choice)_ — CoreAudio UID or name |
+| `MEETINGS_THEM_APP` | _(empty)_ — app name to scope the tap; blank = all system audio |
 | `MEETINGS_DIARIZE` | `auto` (`off` to disable Them-side speaker labels) |
 | `MEETINGS_HF_TOKEN` | _(empty)_ — Hugging Face token for diarization |
 

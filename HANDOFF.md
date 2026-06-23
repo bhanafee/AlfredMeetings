@@ -1,5 +1,22 @@
 # Handoff — AlfredMeetings
 
+> **2026-06-22 — BlackHole replaced by a Core Audio process tap (branch
+> `feature/coreaudio-tap-capture`, NOT merged; needs live verification).**
+> Recording no longer uses BlackHole or Audio MIDI Setup. `record.sh` now launches
+> `MeetingCapture.app` (`src/capture/MeetingCapture.swift`) — a mic-clocked process-tap
+> recorder that writes mic→left ("Me") / system-audio-tap→right ("Them") straight to
+> `rec_*.m4a`, with no output rerouting. Decision: `docs/adr/0001-*.md`; plan/checklist:
+> GitHub issues #1/#2; the proving spike: branch `spike/system-audio-tap` (`src/spike/`
+> with `build-spike.sh` + README evidence), kept off `main`. **Proven headless:** the tap
+> captures real audio with no virtual device, the
+> mic clocks the timeline through far-side silence, m4a writing, device selection, and
+> start-confirmation. **Still needs a real run through Alfred:** `rec` start→stop on a
+> live two-speaker call (first run prompts for *Microphone* — Allow), confirming the
+> Me/Them split and that `pkill -INT` finalises a valid m4a. The TCC/`open`
+> responsible-process discipline below still applies (same reason, now the capture app).
+> Everything from here down predates the migration (BlackHole-era) and is historical
+> except the TCC and venv/state notes, which still hold.
+
 / Status as of 2026-06-18. Recording now works **inside Alfred** (the hard part — a
 macOS TCC/microphone fight, see below), and `rec` now **auto-transcribes** on stop.
 Scripts all verified; the auto-transcribe chain + `notes` still want one run through
