@@ -1,6 +1,53 @@
 # Handoff — AlfredMeetings
 
-> **2026-06-22 (late) — RESUME HERE AFTER REBOOT: run the two-speaker headless test.**
+> **2026-06-22 (post-reboot session) — RESOLVED: the real bug was a missing macOS-26/27
+> system-audio TCC grant, and the two-speaker test now PASSES.** Branch
+> `feature/coreaudio-tap-capture`, still NOT merged. The whole "no IOProc callback / Them
+> is silent" saga was never coreaudiod corruption or a tap-code defect — it was the
+> system-audio-capture permission. On macOS 14.4+ (this machine is **macOS 27.0**, build
+> 26A5353q) a Core Audio process tap is gated by the **`kTCCServiceAudioCapture`** TCC
+> service, SEPARATE from Microphone, and an unauthorized tap delivers **silence (zeros),
+> not an error** — so `AudioDeviceStart` returns 0, the IOProc fires only when there's
+> audio to clock it, and the "Them" channel is dead air (`-inf`).
+>
+> **Three things were needed (all now in `src/capture/MeetingCapture.swift` + `install.sh`):**
+> 1. **Info.plist key `NSAudioCaptureUsageDescription`** (NOT `NSSystemAudioCaptureUsage…`
+>    — that wrong name was tried first and TCC silently refused to prompt with no purpose
+>    string). The bundle keeps `NSMicrophoneUsageDescription` too (mic sub-device).
+> 2. **Explicit `TCCAccessRequest("kTCCServiceAudioCapture")`** via the private TCC
+>    framework (dlopen `…/TCC.framework/Versions/A/TCC`, `TCCAccessPreflight` +
+>    `TCCAccessRequest`) — declaring the key alone never auto-prompts for this service
+>    (unlike Microphone, which coreaudiod prompts for). Modeled on insidegui/AudioCap.
+> 3. **An active `NSApplication`** (`.accessory` policy + `activate`) BEFORE the request —
+>    the prompt is presented by OUR process, and a bare CoreAudio CLI with no WindowServer
+>    connection makes `TCCAccessRequest` hang with no UI. `ensureSystemAudioCaptureAuthorized()`
+>    does preflight → (if not granted) spin up NSApp → request → pump the run loop ≤120s.
+>    Graceful: any failure logs a warning and proceeds (Them just stays silent).
+>
+> **Verified end-to-end (headless, this session):** rendered a 31s gap-free two-voice
+> conversation (Daniel + Samantha) to one WAV, played it through the speakers, captured via
+> the production `open` path. Tap captured cleanly (`Them -3.2 dBFS`) and `meetings
+> transcribe` produced a **correct `Them 1`/`Them 2` split** (Them 1 = Daniel, Them 2 =
+> Samantha, 6/6 lines). A muted run (output volume 0) proved the tap reads the **digital
+> stream before output volume** — `Them` still −3.2 dBFS, and the quiet mic bleed fell
+> under the −50 dBFS energy gate so the transcript was Them-only with NO `Me` duplicates.
+> (At volume 6 the sensitive built-in mic bled enough to duplicate every line on `Me` — a
+> speakers+built-in-mic artifact, not a bug; a headset removes it.)
+>
+> **First-run priming (document for clean installs):** the very first `rec` on a machine
+> will show the System Audio Recording prompt and the app waits up to 120s for it.
+> `record.sh` only polls ~10s for "start confirmed", so the first run is a one-time prime
+> (like the mic grant) — grant it, then `rec` again. Once granted, `preflight == 0` and
+> there's no wait. Consider raising record.sh's confirm ceiling for the first run (TODO).
+>
+> **Still TODO:** repackage (`./build.sh`) + reimport so Alfred's bundle carries the new
+> capture app; a real call through the Alfred GUI; then merge. coreaudiod note below about
+> "killall after BlackHole removal / reboot" stands but was a RED HERRING for this bug —
+> the failures were the missing grant + capturing in silence, not a wedge.
+>
+> ---
+>
+> **2026-06-22 (late) — superseded: the two-speaker headless test (now done, see above).**
 > Branch `feature/coreaudio-tap-capture`, NOT merged. Working tree clean, all work committed
 > (HEAD = the "killall unreliable after driver removal" doc commit).
 >
