@@ -1,5 +1,40 @@
 # Handoff — AlfredMeetings
 
+> **2026-06-22 (late) — RESUME HERE AFTER REBOOT: run the two-speaker headless test.**
+> Branch `feature/coreaudio-tap-capture`, NOT merged. Working tree clean, all work committed
+> (HEAD = the "killall unreliable after driver removal" doc commit).
+>
+> **Why a reboot was needed:** BlackHole was fully uninstalled this session (driver, cask,
+> and all custom `Input/Output Capture` Audio MIDI Setup devices — user confirmed nothing
+> else used it). That HAL driver removal wedged `coreaudiod`: capture FAILs with "no IOProc
+> callback". `sudo killall coreaudiod` proved UNRELIABLE here (one cycle, then zero) — a
+> reboot is the fix. **This account is unprivileged: the user runs all `sudo`/reboot
+> themselves; Claude cannot sudo in-session** (see memory `no-in-session-sudo`).
+>
+> **First thing post-reboot:** verify capture works with a quick `bash setup/devtest.sh
+> start builtin` → expect `recording (start confirmed)` in
+> `~/Library/Application Support/AlfredMeetings/MeetingCapture.log` → `bash setup/devtest.sh
+> stop`. (Mic already granted; no prompt expected. If it still FAILs, the wedge survived —
+> reboot again or investigate.)
+>
+> **Then run the two-speaker test (the one remaining unverified feature: Me/Them split +
+> `Them 1`/`Them 2` diarization).** Prereqs already verified this session: pyannote 4.0.4
+> installed, HF token cached (`get_token()` returns one), `DIARIZE=auto`, voices `Daniel`
+> (en_GB) + `Samantha` (en_US) present. Approach (do it in ONE shot to spend a single capture
+> cycle): set output volume low (`osascript -e 'set volume output volume 6'`) so the mic gets
+> minimal bleed while the process tap still captures the full *digital* system-audio mix as
+> "Them"; `devtest.sh start builtin`; confirm start; play ~6 alternating `say -v Daniel …` /
+> `say -v Samantha …` turns through the speakers; `devtest.sh stop`; restore volume to **19**.
+> Then `meetings transcribe <newest rec_*.m4a>` and check the transcript: far-side lines
+> should be labeled `Them 1` / `Them 2` (Me = mic/bleed). The exact 6-line conversation script
+> is in the session history; any distinct two-voice content works.
+>
+> **State for the reboot:** output volume restored to 19; no orphan `MeetingCapture`/
+> `RecIndicator` procs; no `recording.state`. Session test recordings were cleaned; the
+> `~/Desktop/Meeting Notes/rec_*.m4a` that remain predate today.
+>
+> ---
+>
 > **2026-06-22 (post-reboot) — RESOLVED: the tap stall was transient `coreaudiod`
 > corruption, and the menu-bar indicator leak is fixed. Branch
 > `feature/coreaudio-tap-capture`, still NOT merged.**
