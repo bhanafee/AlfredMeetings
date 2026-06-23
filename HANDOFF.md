@@ -260,6 +260,15 @@ need reimport + restart Alfred so the new info.plist config fields load. Branch:
 - Keep the repo authoritative: any GUI fix → mirror into `src/` and re-export.
 
 ## Conventions / gotchas
+- **Capture FAILs with "no IOProc callback" → `coreaudiod` is wedged.** Symptom:
+  `MeetingCapture.log` shows all 3 start attempts failing with "no IOProc callback in 1.5s"
+  → `FAIL: capture never started`, even though the mic is granted and the device exists.
+  Cause: the Core Audio daemon got into a bad state — confirmed triggers are tearing down a
+  HAL driver (e.g. **uninstalling BlackHole**) and many process-tap create/destroy cycles
+  (heavy debugging). It is **not** a permission, mic, or code defect. **Fix:**
+  `sudo killall coreaudiod` (a reboot also works, but is overkill). This account is
+  unprivileged, so **ask the user to run the `sudo` in a separate terminal** — Claude can't
+  sudo in-session. After the restart, capture confirms its start on the first attempt again.
 - **Device quality**: Bluetooth mic forces SCO → low-quality *listening* for the whole
   call (transcription is fine, Whisper targets 16 kHz). Jabra (USB) does **not** drop
   its output when its mic opens (verified). Speakers-as-output causes acoustic bleed
