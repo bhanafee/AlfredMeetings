@@ -80,7 +80,11 @@ func ensureSystemAudioCaptureAuthorized() {
     nsapp.activate(ignoringOtherApps: true)
     log("  requesting System Audio Recording permission — click Allow if macOS prompts…")
     var done = false, granted = false
-    request(service, nil) { g in granted = g; done = true }
+    // Bind the completion to an explicit @convention(block) constant so it is a real
+    // (heap) block that may escape — TCCAccessRequest holds it for its async reply, and an
+    // inline trailing closure trips Swift's "@noescape closure has escaped" runtime trap.
+    let completion: @convention(block) (Bool) -> Void = { g in granted = g; done = true }
+    request(service, nil, completion)
     // The completion arrives via the app run loop; pump it (we're pre-CFRunLoopRun).
     let deadline = Date().addingTimeInterval(120)
     while !done, Date() < deadline { CFRunLoopRunInMode(.defaultMode, 0.1, true) }
@@ -247,7 +251,12 @@ let aggDesc: [String: Any] = [
     kAudioAggregateDeviceIsStackedKey: false,
     kAudioAggregateDeviceMainSubDeviceKey: micUID,
     kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: micUID]],
-    kAudioAggregateDeviceTapAutoStartKey: true,
+    // MUST be false: with tap auto-start on, the aggregate waits for the tap to deliver
+    // its first buffer before it begins clocking, so starting `rec` in SILENCE (before the
+    // far side talks) never gets an IOProc callback and startConfirmed() fails. With it
+    // off, the mic (clock master) drives the IOProc immediately and the tap fills the right
+    // channel as soon as system audio appears. (Verified: true => FAIL in silence, false => OK.)
+    kAudioAggregateDeviceTapAutoStartKey: false,
     kAudioAggregateDeviceTapListKey: [
         [kAudioSubTapUIDKey: tapDesc.uuid.uuidString,
          kAudioSubTapDriftCompensationKey: true],
