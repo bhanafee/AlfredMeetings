@@ -333,11 +333,11 @@
 	<string>Local meeting recorder + transcriber + note processor.
 
 Keywords:
-  rec         Toggle a stereo recording (mic = left/"Me", system audio = right/"Them"). Run again to stop.
+  rec         Toggle a stereo recording (mic = left/Me, system audio = right/Them). Run again to stop.
   transcribe  Transcribe the newest recording (or a file you pass) into a speaker-labeled Markdown transcript.
   notes       Process the newest transcript: choose Minutes, Summary, Clean up, or type a Custom instruction.
 
-First-time setup: run setup/install.sh (builds the Python venv) and follow setup/audio-setup.md (BlackHole + aggregate/multi-output devices). Requires Homebrew packages ffmpeg, switchaudio-osx, blackhole-2ch and a running Ollama. See README.md.</string>
+The far side is captured with a Core Audio process tap — no BlackHole and no Audio MIDI Setup. First-time setup: run setup/install.sh (Python venv + signed capture/indicator apps); the first rec prompts once for Microphone access. Requires Homebrew ffmpeg, switchaudio-osx and a running Ollama. See README.md.</string>
 	<key>uidata</key>
 	<dict>
 		<key>10000000-0000-0000-0000-000000000001</key>
@@ -432,47 +432,13 @@ First-time setup: run setup/install.sh (builds the Python venv) and follow setup
 				</array>
 			</dict>
 			<key>description</key>
-			<string>Your voice. "Auto" picks the first connected device: Jabra, then Built-in, then Bluetooth. Each maps to an aggregate input you build in Audio MIDI Setup. See setup/audio-setup.md.</string>
+			<string>Your voice. Auto picks the first connected device: Jabra, then Built-in, then Bluetooth. The far side is captured directly with a Core Audio process tap — no BlackHole or Audio MIDI Setup, and your output device and volume are left untouched.</string>
 			<key>label</key>
 			<string>Microphone (input)</string>
 			<key>type</key>
 			<string>popupbutton</string>
 			<key>variable</key>
 			<string>MEETINGS_INPUT_SOURCE</string>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>default</key>
-				<string>auto</string>
-				<key>pairs</key>
-				<array>
-					<array>
-						<string>Auto — Jabra ▸ Bluetooth ▸ Built-in</string>
-						<string>auto</string>
-					</array>
-					<array>
-						<string>Jabra</string>
-						<string>jabra</string>
-					</array>
-					<array>
-						<string>Bluetooth</string>
-						<string>bluetooth</string>
-					</array>
-					<array>
-						<string>Built-in speakers</string>
-						<string>builtin</string>
-					</array>
-				</array>
-			</dict>
-			<key>description</key>
-			<string>What you hear (also mirrored to BlackHole for capture). "Auto" picks the first connected device: Jabra, then Bluetooth, then Built-in. Each maps to a multi-output you build in Audio MIDI Setup. See setup/audio-setup.md.</string>
-			<key>label</key>
-			<string>Listening device (output)</string>
-			<key>type</key>
-			<string>popupbutton</string>
-			<key>variable</key>
-			<string>MEETINGS_OUTPUT_SOURCE</string>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -597,13 +563,13 @@ First-time setup: run setup/install.sh (builds the Python venv) and follow setup
 				<true/>
 			</dict>
 			<key>description</key>
-			<string>Advanced: name an aggregate input device to use regardless of the Microphone choice above. Leave blank to use the Microphone choice.</string>
+			<string>Advanced: a CoreAudio device UID or exact/partial name to use as the mic regardless of the Microphone choice above. Leave blank to use the Microphone choice.</string>
 			<key>label</key>
-			<string>Capture device</string>
+			<string>Microphone device (advanced)</string>
 			<key>type</key>
 			<string>textfield</string>
 			<key>variable</key>
-			<string>MEETINGS_CAPTURE_DEVICE</string>
+			<string>MEETINGS_MIC_DEVICE</string>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -611,39 +577,37 @@ First-time setup: run setup/install.sh (builds the Python venv) and follow setup
 				<key>default</key>
 				<string></string>
 				<key>placeholder</key>
-				<string>(set by Listening device choice)</string>
+				<string>(all system audio)</string>
 				<key>required</key>
 				<false/>
 				<key>trim</key>
 				<true/>
 			</dict>
 			<key>description</key>
-			<string>Advanced: name a multi-output device to use regardless of the Listening device choice above. Leave blank to use the Listening device choice.</string>
+			<string>Capture only one apps audio as Them — name the meeting apps process (e.g. zoom.us, Microsoft Teams). Leave blank to capture all system audio.</string>
 			<key>label</key>
-			<string>Output device</string>
+			<string>Meeting app (Them)</string>
 			<key>type</key>
 			<string>textfield</string>
 			<key>variable</key>
-			<string>MEETINGS_OUTPUT_DEVICE</string>
+			<string>MEETINGS_THEM_APP</string>
 		</dict>
 	</array>
 	<key>variables</key>
 	<dict>
-		<key>MEETINGS_CAPTURE_DEVICE</key>
-		<string></string>
 		<key>MEETINGS_DIARIZE</key>
 		<string>auto</string>
 		<key>MEETINGS_HF_TOKEN</key>
 		<string></string>
 		<key>MEETINGS_INPUT_SOURCE</key>
 		<string>auto</string>
-		<key>MEETINGS_OUTPUT_SOURCE</key>
-		<string>auto</string>
 		<key>MEETINGS_LLM_MODEL</key>
 		<string></string>
-		<key>MEETINGS_OUTPUT_DEVICE</key>
+		<key>MEETINGS_MIC_DEVICE</key>
 		<string></string>
 		<key>MEETINGS_OUTPUT_DIR</key>
+		<string></string>
+		<key>MEETINGS_THEM_APP</key>
 		<string></string>
 		<key>MEETINGS_WHISPER_MODEL</key>
 		<string></string>

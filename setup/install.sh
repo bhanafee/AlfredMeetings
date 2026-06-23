@@ -1,16 +1,18 @@
 #!/bin/bash
 # One-time setup for AlfredMeetings: a Python venv with the transcription and
-# LLM-client libraries. This is the pip side only and needs no Homebrew.
+# LLM-client libraries, plus the native capture + indicator helper apps.
 #
-# Homebrew packages (ffmpeg, switchaudio-osx, blackhole-2ch, ollama) and the
-# Audio MIDI devices must be set up separately — see ../README.md and
-# ./audio-setup.md.
+# Far-side audio is captured with a Core Audio process tap (no BlackHole, no Audio MIDI
+# Setup — see ../docs/adr/0001-*.md); first `rec` will prompt once for Microphone access.
+# Homebrew packages (ffmpeg, switchaudio-osx, ollama) and a running Ollama are still
+# needed — see ../README.md.
 set -e
 
 # Must match config.sh exactly (a fixed path, not $alfred_workflow_data) so the
 # venv built here is found when Alfred runs the scripts.
 SUPPORT="${MEETINGS_SUPPORT:-$HOME/Library/Application Support/AlfredMeetings}"
 VENV="$SUPPORT/venv"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mkdir -p "$SUPPORT"
 
 echo ">>> Creating Python venv at: $VENV"
@@ -26,49 +28,51 @@ echo ">>> Installing pyannote.audio for per-speaker Them labels (pulls PyTorch)�
 "$VENV/bin/pip" install --quiet pyannote.audio || \
   echo "  WARNING: pyannote.audio install failed — Them-side speaker labels will be off."
 
-echo ">>> Building microphone-capture wrapper app…"
-# macOS aborts any process that opens the mic without an NSMicrophoneUsageDescription.
-# Homebrew's bare ffmpeg has none, and Alfred disclaims responsibility for the
-# processes it spawns, so ffmpeg becomes its own responsible process and crashes
-# (SIGABRT, TCC) instead of recording. Wrap a copy of ffmpeg in a tiny signed .app
-# that carries the usage description; record.sh uses it for capture (see config.sh).
-FFMPEG_BIN="$(command -v ffmpeg || true)"
-if [ -n "$FFMPEG_BIN" ]; then
-  FFMPEG_REAL="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$FFMPEG_BIN")"
-  APP="$SUPPORT/MicCapture.app"
-  rm -rf "$APP"
-  mkdir -p "$APP/Contents/MacOS"
-  cp "$FFMPEG_REAL" "$APP/Contents/MacOS/ffmpeg"
-  cat > "$APP/Contents/Info.plist" <<'PLIST'
+echo ">>> Building capture helper (MeetingCapture.app)…"
+# Records the meeting as stereo (mic -> left "Me", system-audio process tap -> right
+# "Them") with no BlackHole. The tap is TCC-gated by the Microphone service, so the
+# bundle carries NSMicrophoneUsageDescription and record.sh launches it via `open` so it
+# is its own responsible process. See ../docs/adr/0001-*.md.
+CAP_SRC="$REPO_ROOT/src/capture/MeetingCapture.swift"
+if command -v swiftc >/dev/null 2>&1 && [ -f "$CAP_SRC" ]; then
+  CAP="$SUPPORT/MeetingCapture.app"
+  rm -rf "$CAP"
+  mkdir -p "$CAP/Contents/MacOS"
+  if swiftc -O "$CAP_SRC" -o "$CAP/Contents/MacOS/MeetingCapture" \
+       -framework CoreAudio -framework AudioToolbox 2>/dev/null; then
+    cat > "$CAP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleExecutable</key><string>ffmpeg</string>
-  <key>CFBundleIdentifier</key><string>com.maybeitssquid.alfredmeetings.miccapture</string>
-  <key>CFBundleName</key><string>AlfredMeetings Mic Capture</string>
+  <key>CFBundleExecutable</key><string>MeetingCapture</string>
+  <key>CFBundleIdentifier</key><string>com.maybeitssquid.alfredmeetings.capture</string>
+  <key>CFBundleName</key><string>AlfredMeetings Capture</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>LSUIElement</key><true/>
-  <key>NSMicrophoneUsageDescription</key><string>AlfredMeetings records your meeting audio locally for transcription.</string>
+  <key>NSMicrophoneUsageDescription</key><string>AlfredMeetings records your meeting audio (your mic and the far side) locally for transcription.</string>
 </dict>
 </plist>
 PLIST
-  if codesign --force --sign - --identifier com.maybeitssquid.alfredmeetings.miccapture "$APP" 2>/dev/null; then
-    echo "  ok:      $APP (signed)"
+    if codesign --force --sign - --identifier com.maybeitssquid.alfredmeetings.capture "$CAP" 2>/dev/null; then
+      echo "  ok:      $CAP (signed)"
+      echo "  NOTE:    first 'rec' will prompt once for Microphone access — click Allow."
+    else
+      echo "  WARNING: codesign failed for $CAP — capture may not get the mic grant."
+    fi
   else
-    echo "  WARNING: codesign failed for $APP — mic capture may still crash under Alfred."
+    echo "  WARNING: swiftc failed to build the capture helper — recording will not work."
   fi
 else
-  echo "  MISSING: ffmpeg — cannot build mic-capture wrapper (see README.md)."
+  echo "  MISSING: swiftc (Xcode CLT) — cannot build the capture helper (see README.md)."
 fi
 
 echo ">>> Building menu-bar recording indicator…"
 # A tiny native status-bar app shown while recording (red ● in the menu bar, click to
 # stop). record.sh launches it on start and kills it on stop. No special entitlement is
 # needed — it never opens the mic.
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SWIFT_SRC="$REPO_ROOT/src/indicator/RecIndicator.swift"
 if command -v swiftc >/dev/null 2>&1 && [ -f "$SWIFT_SRC" ]; then
   IND="$SUPPORT/RecIndicator.app"
@@ -119,10 +123,9 @@ for t in ffmpeg ollama SwitchAudioSource; do
     echo "  MISSING: $t  (see README.md)"
   fi
 done
+# BlackHole is NO LONGER required (the process tap replaced it). Only note it if present.
 if SwitchAudioSource -a 2>/dev/null | grep -qi blackhole; then
-  echo "  ok:      BlackHole audio device"
-else
-  echo "  MISSING: BlackHole audio device  (see audio-setup.md)"
+  echo "  note:    BlackHole present — not used anymore; safe to remove (see audio-setup.md)."
 fi
 
 echo ">>> Done. Output dir: ${MEETINGS_OUTPUT_DIR:-$HOME/Desktop/Meeting Notes}"
