@@ -1,5 +1,7 @@
 # Meeting Notes — Alfred workflow
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Record a meeting, transcribe it locally with speaker separation, and turn the
 transcript into clean notes / a summary / minutes — all on-device, no cloud, no
 per-meeting cost. Built for Apple Silicon.
