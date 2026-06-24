@@ -1,5 +1,7 @@
 # Third-Party Notices
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 AlfredMeetings (the source in this repository) is licensed under the [MIT License](LICENSE).
 
 It relies on third-party software at **install and run time**, but **does not bundle or
