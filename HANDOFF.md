@@ -1,5 +1,25 @@
 # Handoff — AlfredMeetings
 
+> **2026-06-24 — MERGED. The Core Audio process-tap migration is on `main`.** PR #4
+> (`feature/coreaudio-tap-capture` → `main`) merged at commit `d4b8b04`; the record.sh
+> first-run prompt polish (`96a1b14`) rode in with it. Both the feature branch and the
+> `spike/system-audio-tap` proving branch have been **deleted** (local + origin) — the ADR
+> (`docs/adr/0001-system-audio-capture-via-core-audio-process-tap.md`) is on `main`, so the
+> decision record survives; only the throwaway `src/spike/` prototype is gone (recoverable
+> from reflog until GC if ever needed). No CI exists on this repo (no `.github/workflows`),
+> so there was no check gate. Local `main` is fast-forwarded and clean.
+>
+> **Open items (none blocking):**
+>   - The first-run system-audio priming branch in `record.sh` is verified by structure +
+>     the exact log-line match + the already-granted path still confirming fast (~0.46s), but
+>     was never live-exercised — this machine already holds the grant (`preflight == 0`). A
+>     true clean-machine first-run test needs a machine that has never granted system-audio
+>     capture.
+>   - Optional: add a lightweight CI workflow (`bash -n`/shellcheck on the scripts,
+>     `plutil -lint` on `info.plist`, `swiftc` compile-check) — none exists today.
+>
+> <details><summary>Prior banner — 2026-06-23: record.sh first-run prompt timeout (the work that merged)</summary>
+>
 > **2026-06-23 — record.sh first-run prompt timeout: DONE. Only the final GUI confirm +
 > merge remain.** Branch `feature/coreaudio-tap-capture`, NOT merged. The confirm loop in
 > `src/bin/record.sh` (was a fixed ~10s ceiling) now watches for MeetingCapture's exact log
@@ -19,6 +39,8 @@
 > **REMAINING (user/GUI): one GUI `rec` start→stop to confirm the common case, then MERGE
 > `feature/coreaudio-tap-capture` to main.** (A true clean-machine first-run test would need
 > a machine that has never granted system-audio capture.)
+>
+> </details>
 >
 > <details><summary>Prior banner — 2026-06-22 (end of session): working end-to-end through the GUI</summary>
 >
