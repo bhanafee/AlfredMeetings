@@ -46,6 +46,7 @@ each. Licenses are given as SPDX identifiers where available; `see project` mark
 pyannote suite, whose distributions ship no license metadata but are published under the
 MIT License (see each project's `LICENSE`).
 
+<!-- BEGIN GENERATED TABLE — do not edit by hand; run `setup/check-notices.sh --refresh` -->
 | Package | Version | License |
 |---|---|---|
 | `aiohappyeyeballs` | 2.6.2 | PSF-2.0 |
@@ -158,6 +159,7 @@ MIT License (see each project's `LICENSE`).
 | `typing_extensions` | 4.15.0 | PSF-2.0 |
 | `urllib3` | 2.7.0 | MIT |
 | `yarl` | 1.24.2 | Apache-2.0 |
+<!-- END GENERATED TABLE -->
 
 _Versions reflect the resolved environment at the time of writing; `pip` may resolve
 newer compatible versions on a fresh install._
