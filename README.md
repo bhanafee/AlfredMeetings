@@ -163,5 +163,6 @@ The runtime dependencies are **not** bundled or redistributed here — `setup/in
 fetches them on your machine (the Python venv via `pip`; `ffmpeg`, `ollama`, and
 `switchaudio-osx` via Homebrew). They keep their own licenses (mostly MIT / BSD /
 Apache-2.0). `ffmpeg` is only invoked as a separate process, so its GPL terms do not
-apply to this code.
+apply to this code. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for the full
+dependency list and per-package licenses.
 
