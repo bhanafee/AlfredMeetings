@@ -54,9 +54,14 @@ start_recording() {
     exit 1
   fi
 
-  local stamp audio
+  # No recording is active on this path, so any surviving indicator is an orphan from an
+  # earlier failed start. Clear it now so indicators never pile up in the menu bar.
+  pkill -f "RecIndicator.app" 2>/dev/null || true
+
+  local stamp audio log
   stamp="$(date +%Y-%m-%d_%H-%M-%S)"
   audio="$OUTPUT_DIR/rec_$stamp.m4a"
+  log="$SUPPORT/MeetingCapture.log"
   printf '%s\n' "$audio" > "$STATEFILE"
 
   # Optional: scope the tap to one app (config THEM_APP); otherwise tap all system audio.
@@ -71,25 +76,47 @@ start_recording() {
     fi
   fi
 
+  # Truncate the log so we only read THIS run's start outcome (the capture app appends).
+  : > "$log"
+
   # Launched via `open` for TCC responsibility (above). MeetingCapture writes
   # mic -> left ("Me"), tap -> right ("Them"), runs until SIGINT, and confirms its own
   # start before recording.
   open -n -a "$CAPTURE_APP" --args \
     --out "$audio" --mic "$MIC_DEVICE" "${scope[@]}" \
-    --log "$SUPPORT/MeetingCapture.log"
+    --log "$log"
 
-  for _ in $(seq 1 12); do [ -n "$(rec_pids "$(basename "$audio")")" ] && break; sleep 0.3; done
-  if ! is_recording; then
+  # Wait for MeetingCapture to CONFIRM its start (an IOProc actually fired) — not merely
+  # for the process to exist. It spends up to ~4.5s in its start-retry loop before logging
+  # "recording (start confirmed)" or "FAIL"; launching the indicator any earlier leaks it
+  # whenever the start ultimately fails (the cause of stray menu-bar indicators).
+  local confirmed="" maxpolls=40 i=0 primed=""               # ~10s ceiling (> 4.5s window)
+  while [ "$i" -lt "$maxpolls" ]; do
+    if grep -q "recording (start confirmed)" "$log" 2>/dev/null; then confirmed=1; break; fi
+    if grep -qE "^(FAIL|FATAL):" "$log" 2>/dev/null; then break; fi
+    # First-run priming: on a machine that has never granted system-audio capture,
+    # MeetingCapture shows the "System Audio Recording" prompt and waits up to 120s for it.
+    # Detect its request line and extend our ceiling once (a one-time prime, like the mic
+    # grant) so the user has time to click Allow instead of us killing the prompt at ~10s.
+    if [ -z "$primed" ] && grep -q "requesting System Audio Recording permission" "$log" 2>/dev/null; then
+      primed=1; maxpolls=520                                 # ~130s ceiling (> the app's 120s wait)
+      echo "🔐 First run: click Allow on the 'System Audio Recording' prompt to enable Them capture…" >&2
+    fi
+    i=$((i + 1)); sleep 0.25
+  done
+
+  if [ -z "$confirmed" ]; then
+    pkill -INT -f "$(basename "$audio")" 2>/dev/null || true # stop a hung/late starter
     rm -f "$STATEFILE"
-    echo "❌ Recorder didn't start. If macOS shows a mic prompt for 'AlfredMeetings Capture', click Allow, then run rec again." >&2
+    echo "❌ Recorder didn't start. If macOS shows a 'Microphone' or 'System Audio Recording' prompt for 'AlfredMeetings Capture', click Allow, then run rec again." >&2
     exit 1
   fi
-  # Show the menu-bar "recording now" indicator (best-effort; never blocks recording).
-  # The stamp is passed so stop_recording can find/kill this app by argv match.
+  # Confirmed recording → show the menu-bar "recording now" indicator (best-effort; never
+  # blocks). The stamp is passed so stop_recording can find/kill this app by argv match.
   if [ -d "$INDICATOR_APP" ]; then
     open -n -a "$INDICATOR_APP" --args --stamp "$stamp" --stop "$ROOT/bin/record.sh" >/dev/null 2>&1 || true
   fi
-  echo "🔴 Recording… (if macOS asks, allow mic access for AlfredMeetings Capture). Run 'rec' again to stop."
+  echo "🔴 Recording… Run 'rec' again to stop."
 }
 
 if is_recording; then

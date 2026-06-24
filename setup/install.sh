@@ -53,6 +53,7 @@ if command -v swiftc >/dev/null 2>&1 && [ -f "$CAP_SRC" ]; then
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>LSUIElement</key><true/>
   <key>NSMicrophoneUsageDescription</key><string>AlfredMeetings records your meeting audio (your mic and the far side) locally for transcription.</string>
+  <key>NSAudioCaptureUsageDescription</key><string>AlfredMeetings captures the far-side meeting audio (other apps' output) locally for transcription.</string>
 </dict>
 </plist>
 PLIST

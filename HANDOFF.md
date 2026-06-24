@@ -1,5 +1,247 @@
 # Handoff — AlfredMeetings
 
+> **2026-06-23 — record.sh first-run prompt timeout: DONE. Only the final GUI confirm +
+> merge remain.** Branch `feature/coreaudio-tap-capture`, NOT merged. The confirm loop in
+> `src/bin/record.sh` (was a fixed ~10s ceiling) now watches for MeetingCapture's exact log
+> line `requesting System Audio Recording permission` and, on seeing it, extends the ceiling
+> ONCE to ~130s (`maxpolls=520`, > the app's 120s prompt wait) and prints a "click Allow"
+> hint — so the first `rec` on a never-granted machine no longer kills the System Audio
+> Recording prompt at 10s. Failure message now names both 'Microphone' and 'System Audio
+> Recording'. The already-granted path is unchanged (logs "already authorized", never the
+> request line → `maxpolls` stays 40); re-verified live this session: start confirmed in
+> **0.46s**, clean stop, state clean. Workflow repackaged (`dist/AlfredMeetings.alfredworkflow`)
+> AND the updated `record.sh` was synced into the installed Alfred workflow bundle, so the
+> next GUI `rec` already uses it. **NOTE: the first-run priming branch itself could NOT be
+> live-tested here — this machine already has the grant (`preflight == 0`), so the prompt
+> never appears; it's verified by structure + the exact log-line match + the normal path
+> still confirming fast.**
+>
+> **REMAINING (user/GUI): one GUI `rec` start→stop to confirm the common case, then MERGE
+> `feature/coreaudio-tap-capture` to main.** (A true clean-machine first-run test would need
+> a machine that has never granted system-audio capture.)
+>
+> <details><summary>Prior banner — 2026-06-22 (end of session): working end-to-end through the GUI</summary>
+>
+> **2026-06-22 (end of session) — WORKING END-TO-END THROUGH THE ALFRED GUI. Resume
+> tomorrow with ONE polish task (record.sh first-run prompt timeout), then merge.** Branch
+> `feature/coreaudio-tap-capture`, NOT merged. Last 3 commits are this session's fixes
+> (`fc96110` silence-start + TCC crash, `2c78ff8` system-audio TCC grant). Working tree
+> clean; workflow repackaged (`dist/AlfredMeetings.alfredworkflow`); state clean (no orphan
+> procs, no recording.state, volume 19, no stray rec_*.m4a). System-audio grant IS in place
+> on this machine (`preflight == 0`).
+>
+> **What works now (user-verified in the Alfred GUI this session):** `rec` start → stop →
+> saved `rec_*.m4a` → auto-transcript with Me/Them. Headless this session also verified the
+> two-speaker `Them 1`/`Them 2` diarization split (Daniel/Samantha, 6/6 lines) and that the
+> capture starts in SILENCE (rec before anyone talks) with the tap filling Them once audio
+> appears.
+>
+> **THE ONE REMAINING TASK (tomorrow): record.sh first-run prompt timeout.**
+> On a CLEAN machine (no grant yet), the first `rec` makes MeetingCapture show the System
+> Audio Recording prompt and wait up to 120s for it — but `record.sh` only polls ~10s for
+> "recording (start confirmed)" then kills the capture (orphaning the prompt). It's a
+> one-time prime (like the mic grant), but the UX is poor. Fix in `src/bin/record.sh` around
+> the confirm loop (verified line numbers today):
+>   - **L94:** `for _ in $(seq 1 40); do … sleep 0.25` = the ~10s ceiling.
+>   - **L95–97:** greps `MeetingCapture.log` for `recording (start confirmed)` / `^(FAIL|FATAL):`.
+>   - **L100–103:** on no-confirm it `pkill -INT`s the capture and prints "click Allow … mic prompt".
+>   Plan: when the log shows MeetingCapture's line `requesting System Audio Recording
+>   permission` (it logs exactly that), EXTEND the ceiling (e.g. to ~125s) so the user can
+>   click Allow, and update the failure/echo message to mention **System Audio Recording**
+>   (not just the mic). Then on a clean machine: first `rec` prompts → Allow → it records;
+>   subsequent runs `preflight == 0`, no wait. Re-test the normal (already-granted) path too
+>   so the common case still confirms in ~1s.
+>
+> **After that:** repackage (`./build.sh`) if record.sh changed, reimport into Alfred, one
+> more GUI `rec` to confirm, then MERGE `feature/coreaudio-tap-capture`.
+>
+> </details>
+>
+> **Key facts for the fix (still useful reference; don't re-derive):**
+>   - Capture app runs from `~/Library/Application Support/AlfredMeetings/MeetingCapture.app`
+>     (path pinned in config.sh), NOT the workflow bundle — so rebuilding it via install.sh's
+>     block takes effect for Alfred immediately (no reimport needed for app-only changes).
+>   - Rebuilding the app changes its cdhash → TCC re-confirms the existing grant WITHOUT a
+>     visible prompt (observed: preflight=2 → request → "GRANTED" instantly). So routine
+>     rebuilds don't re-prompt; only a never-granted machine does.
+>   - `ensureSystemAudioCaptureAuthorized()` in MeetingCapture.swift gates the tap; the
+>     three required pieces (Info.plist `NSAudioCaptureUsageDescription`, private
+>     `TCCAccessRequest("kTCCServiceAudioCapture")`, active NSApplication) are all in place.
+>   - `kAudioAggregateDeviceTapAutoStartKey` MUST stay `false` (true => no start in silence).
+>
+> <details><summary>Earlier same-session detail: the system-audio TCC root cause (still true)</summary>
+>
+> **2026-06-22 — RESOLVED: the real bug was a missing macOS-26/27
+> system-audio TCC grant.** The whole "no IOProc callback / Them
+> is silent" saga was never coreaudiod corruption or a tap-code defect — it was the
+> system-audio-capture permission. On macOS 14.4+ (this machine is **macOS 27.0**, build
+> 26A5353q) a Core Audio process tap is gated by the **`kTCCServiceAudioCapture`** TCC
+> service, SEPARATE from Microphone, and an unauthorized tap delivers **silence (zeros),
+> not an error** — so `AudioDeviceStart` returns 0, the IOProc fires only when there's
+> audio to clock it, and the "Them" channel is dead air (`-inf`).
+>
+> **Three things were needed (all now in `src/capture/MeetingCapture.swift` + `install.sh`):**
+> 1. **Info.plist key `NSAudioCaptureUsageDescription`** (NOT `NSSystemAudioCaptureUsage…`
+>    — that wrong name was tried first and TCC silently refused to prompt with no purpose
+>    string). The bundle keeps `NSMicrophoneUsageDescription` too (mic sub-device).
+> 2. **Explicit `TCCAccessRequest("kTCCServiceAudioCapture")`** via the private TCC
+>    framework (dlopen `…/TCC.framework/Versions/A/TCC`, `TCCAccessPreflight` +
+>    `TCCAccessRequest`) — declaring the key alone never auto-prompts for this service
+>    (unlike Microphone, which coreaudiod prompts for). Modeled on insidegui/AudioCap.
+> 3. **An active `NSApplication`** (`.accessory` policy + `activate`) BEFORE the request —
+>    the prompt is presented by OUR process, and a bare CoreAudio CLI with no WindowServer
+>    connection makes `TCCAccessRequest` hang with no UI. `ensureSystemAudioCaptureAuthorized()`
+>    does preflight → (if not granted) spin up NSApp → request → pump the run loop ≤120s.
+>    Graceful: any failure logs a warning and proceeds (Them just stays silent).
+>
+> **Verified end-to-end (headless, this session):** rendered a 31s gap-free two-voice
+> conversation (Daniel + Samantha) to one WAV, played it through the speakers, captured via
+> the production `open` path. Tap captured cleanly (`Them -3.2 dBFS`) and `meetings
+> transcribe` produced a **correct `Them 1`/`Them 2` split** (Them 1 = Daniel, Them 2 =
+> Samantha, 6/6 lines). A muted run (output volume 0) proved the tap reads the **digital
+> stream before output volume** — `Them` still −3.2 dBFS, and the quiet mic bleed fell
+> under the −50 dBFS energy gate so the transcript was Them-only with NO `Me` duplicates.
+> (At volume 6 the sensitive built-in mic bled enough to duplicate every line on `Me` — a
+> speakers+built-in-mic artifact, not a bug; a headset removes it.)
+>
+> **First-run priming (document for clean installs):** the very first `rec` on a machine
+> will show the System Audio Recording prompt and the app waits up to 120s for it.
+> `record.sh` only polls ~10s for "start confirmed", so the first run is a one-time prime
+> (like the mic grant) — grant it, then `rec` again. Once granted, `preflight == 0` and
+> there's no wait. Consider raising record.sh's confirm ceiling for the first run (TODO).
+>
+> **Still TODO:** repackage (`./build.sh`) + reimport so Alfred's bundle carries the new
+> capture app; a real call through the Alfred GUI; then merge. coreaudiod note below about
+> "killall after BlackHole removal / reboot" stands but was a RED HERRING for this bug —
+> the failures were the missing grant + capturing in silence, not a wedge.
+>
+> </details>
+>
+> ---
+>
+> **2026-06-22 (late) — superseded: the two-speaker headless test (now done, see above).**
+> Branch `feature/coreaudio-tap-capture`, NOT merged. Working tree clean, all work committed
+> (HEAD = the "killall unreliable after driver removal" doc commit).
+>
+> **Why a reboot was needed:** BlackHole was fully uninstalled this session (driver, cask,
+> and all custom `Input/Output Capture` Audio MIDI Setup devices — user confirmed nothing
+> else used it). That HAL driver removal wedged `coreaudiod`: capture FAILs with "no IOProc
+> callback". `sudo killall coreaudiod` proved UNRELIABLE here (one cycle, then zero) — a
+> reboot is the fix. **This account is unprivileged: the user runs all `sudo`/reboot
+> themselves; Claude cannot sudo in-session** (see memory `no-in-session-sudo`).
+>
+> **First thing post-reboot:** verify capture works with a quick `bash setup/devtest.sh
+> start builtin` → expect `recording (start confirmed)` in
+> `~/Library/Application Support/AlfredMeetings/MeetingCapture.log` → `bash setup/devtest.sh
+> stop`. (Mic already granted; no prompt expected. If it still FAILs, the wedge survived —
+> reboot again or investigate.)
+>
+> **Then run the two-speaker test (the one remaining unverified feature: Me/Them split +
+> `Them 1`/`Them 2` diarization).** Prereqs already verified this session: pyannote 4.0.4
+> installed, HF token cached (`get_token()` returns one), `DIARIZE=auto`, voices `Daniel`
+> (en_GB) + `Samantha` (en_US) present. Approach (do it in ONE shot to spend a single capture
+> cycle): set output volume low (`osascript -e 'set volume output volume 6'`) so the mic gets
+> minimal bleed while the process tap still captures the full *digital* system-audio mix as
+> "Them"; `devtest.sh start builtin`; confirm start; play ~6 alternating `say -v Daniel …` /
+> `say -v Samantha …` turns through the speakers; `devtest.sh stop`; restore volume to **19**.
+> Then `meetings transcribe <newest rec_*.m4a>` and check the transcript: far-side lines
+> should be labeled `Them 1` / `Them 2` (Me = mic/bleed). The exact 6-line conversation script
+> is in the session history; any distinct two-voice content works.
+>
+> **State for the reboot:** output volume restored to 19; no orphan `MeetingCapture`/
+> `RecIndicator` procs; no `recording.state`. Session test recordings were cleaned; the
+> `~/Desktop/Meeting Notes/rec_*.m4a` that remain predate today.
+>
+> ---
+>
+> **2026-06-22 (post-reboot) — RESOLVED: the tap stall was transient `coreaudiod`
+> corruption, and the menu-bar indicator leak is fixed. Branch
+> `feature/coreaudio-tap-capture`, still NOT merged.**
+>
+> **Tap stall → resolved.** After the reboot + a clean `setup/install.sh` rebuild, the
+> Core Audio process tap confirms its start on the *first* IOProc attempt (no retries)
+> and records valid stereo m4a — Me on the mic (left), Them on the tap (right). The
+> "ZERO IOProc callbacks" failure documented below was transient `coreaudiod` corruption
+> from the many create/destroy cycles during debugging, not a defect in the tap. The
+> diagnostic stash (`--no-tap` etc.) was dropped; the committed source is the working one.
+>
+> **Menu-bar indicator leak → fixed (`src/bin/record.sh`).** Root cause: `record.sh`
+> confirmed start by *process existence* (a ~3.6s wait), but `MeetingCapture` spends up to
+> 4.5s in its `startConfirmed()` retry loop before it logs `recording (start confirmed)`
+> or `FAIL`. So the indicator was launched *before* confirmation; on a failed start it was
+> orphaned, and the next `rec` took the start branch (process already gone) without killing
+> it → indicators accumulated in the menu bar. Fix: start now (1) truncates the per-run
+> capture log and polls it for the real `recording (start confirmed)` marker before
+> launching the indicator (bails on `FAIL`/`FATAL` or a 10s ceiling), (2) `pkill`s any
+> surviving `RecIndicator.app` on the start path (none should exist when idle), and
+> (3) stops a hung capture + clears state on a failed start. Verified end-to-end:
+> start → exactly one indicator + one capture → stop → finalized m4a, all procs/state cleared.
+>
+> **Still unverified:** a real two-speaker take (far-side audio) for the Me/Them split and
+> `Them 1/2` diarization — needs a live call or a two-voice clip played through system audio.
+>
+> <details><summary>Original (now-superseded) reboot finding — kept for history</summary>
+>
+> **Critical finding (isolated with a diagnostic build):** the Core Audio process tap
+> does not deliver IOProc callbacks, so `MeetingCapture` never starts recording. Proven
+> by an isolation test (`--no-tap`):
+> - **Mic-only aggregate** → WORKS: `AudioDeviceStart` OSStatus 0, IOProc fires, recorded
+>   20.1s, Me −11.0 dBFS, mic attaches as sub-device (id 99).
+> - **Mic + global process tap** → STALLS: tap creates OK (id 151), mic attaches,
+>   `AudioDeviceStart` returns OSStatus 0, but **ZERO IOProc callbacks for a full 10s** →
+>   `FAIL: capture never started`.
+> - Conclusion: the defect is the **process tap in the aggregate's `kAudioAggregateDeviceTapListKey`**
+>   wedging the device. It is **NOT** a permission or timing issue — the mic grant, the
+>   mic-clocked aggregate, the IOProc, and the AAC m4a writer are all proven working.
+>   (Every "no IOProc callback" failure earlier in the session was this same tap stall.)
+>
+> **State at handoff (clean slate, pre-reboot):**
+> - Removed `MeetingCapture.app`, `RecIndicator.app`, `MicCapture.app` from
+>   `~/Library/Application Support/AlfredMeetings/`. **`venv` kept** (unrelated to the bug;
+>   rebuilding re-downloads GBs).
+> - TCC mic grants: apps deleted, so `tccutil reset <id>` returns "no such bundle id"; the
+>   stale Microphone entries (MeetingCapture / MicCapture / MicTapMerge) **flush on reboot**.
+> - **Diagnostic source edits are STASHED** — `git stash` entry *"diagnostic capture edits
+>   (--no-tap, 10s window, extra logging)"*. Working tree = committed branch source (verified,
+>   no `--no-tap`). The harness adds to `MeetingCapture.swift`: a `--no-tap` flag (mic-only
+>   aggregate), a single 10s start window (vs committed 3×1.5s) with per-second
+>   "waiting for callback" logging, `AudioDeviceStart` OSStatus logging instead of `fail()`,
+>   and a log of the aggregate's active sub-device list.
+> - Cleared all logs, `recording.state`, and `diag_*.m4a`.
+> - `.claude/settings.local.json` (gitignored) gained allow-rules this session: relative
+>   `bash setup/devtest.sh`, `transcribe.sh`, `ffprobe`/`ffmpeg`, `pgrep`/`cat`/`tail`/`ls`/`stat`.
+>
+> **macOS gotcha discovered:** re-signing an ad-hoc app **in place** (`swiftc` over an
+> existing bundle + `codesign --force`) made macOS treat it as *damaged* and **delete the
+> `.app` on next `open`**. Always rebuild the bundle **from scratch** (`rm -rf` → `mkdir` →
+> compile → write Info.plist → `codesign`), exactly as `setup/install.sh` does. Env: macOS
+> Darwin 27.0.0; `swiftc` at `/usr/bin/swiftc`; Ollama up; auto-mic = `MacBook Air Microphone`
+> (no Jabra/Bluetooth connected).
+>
+> **POST-REBOOT PLAN:**
+> 1. **Clean build:** run `setup/install.sh` (rebuilds + signs `MeetingCapture.app` and
+>    `RecIndicator.app` from committed source; venv present so pip steps are fast).
+> 2. **Test capture:** `bash setup/devtest.sh start builtin` → expect a macOS mic prompt for
+>    "AlfredMeetings Capture" → **Allow**. The committed start window is only 4.5s (3×1.5s),
+>    shorter than a prompt response, so the first run primes the grant — then run it again.
+>    Check `~/Library/Application Support/AlfredMeetings/MeetingCapture.log`.
+> 3. **Branch:**
+>    - **If capture now works** → the tap stall was transient `coreaudiod` corruption from
+>      our many create/destroy cycles; proceed with the original live verification (record a
+>      two-speaker take → stop → transcribe Me/Them → optional Alfred GUI run).
+>    - **If the tap still stalls** → genuine defect. Restore the harness (`git stash pop`),
+>      rebuild from scratch, and investigate WHY the tap wedges the aggregate. Candidates:
+>      (a) the global tap needs a separate start / its own permission on macOS 26;
+>      (b) `kAudioAggregateDeviceTapAutoStartKey` + per-tap drift compensation interaction;
+>      (c) try a per-PID tap (`--pid`) instead of the global tap;
+>      (d) inspect Console/`log stream` for `coreaudiod` errors during the stall.
+>      **Diff the committed `MeetingCapture.swift` against the proven-working spike** on
+>      branch `spike/system-audio-tap` (`src/spike/`) to find what diverged and broke the tap.
+>
+> </details>
+>
+> ---
+>
 > **2026-06-22 — BlackHole replaced by a Core Audio process tap (branch
 > `feature/coreaudio-tap-capture`, NOT merged; needs live verification).**
 > Recording no longer uses BlackHole or Audio MIDI Setup. `record.sh` now launches
@@ -172,6 +414,19 @@ need reimport + restart Alfred so the new info.plist config fields load. Branch:
 - Keep the repo authoritative: any GUI fix → mirror into `src/` and re-export.
 
 ## Conventions / gotchas
+- **Capture FAILs with "no IOProc callback" → `coreaudiod` is wedged.** Symptom:
+  `MeetingCapture.log` shows all 3 start attempts failing with "no IOProc callback in 1.5s"
+  → `FAIL: capture never started`, even though the mic is granted and the device exists.
+  Cause: the Core Audio daemon got into a bad state — confirmed triggers are tearing down a
+  HAL driver (e.g. **uninstalling BlackHole**) and many process-tap create/destroy cycles
+  (heavy debugging). It is **not** a permission, mic, or code defect. **Fix:**
+  `sudo killall coreaudiod` for the *churn* case clears it. **But after a HAL driver removal
+  (uninstalling BlackHole), `killall` is UNRELIABLE** — observed 2026-06-22: post-uninstall it
+  bought one good record/stop cycle, then re-wedged; a second `killall` (daemon confirmed
+  restarted, uptime 40s) bought *zero* cycles. **A full reboot is the reliable fix** there
+  (post-reboot the tap ran across many cycles). This account is unprivileged, so **ask the
+  user to run the `sudo`/reboot** — Claude can't sudo in-session. Prefer reboot after a
+  driver uninstall; reserve `killall` for the create/destroy-churn case.
 - **Device quality**: Bluetooth mic forces SCO → low-quality *listening* for the whole
   call (transcription is fine, Whisper targets 16 kHz). Jabra (USB) does **not** drop
   its output when its mic opens (verified). Speakers-as-output causes acoustic bleed

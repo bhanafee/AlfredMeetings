@@ -42,7 +42,29 @@ Leave **Meeting app (Them)** blank to capture all system audio, or set it (or
 
 ## Legacy: removing BlackHole
 
-Earlier versions routed audio through BlackHole and six aggregate/multi-output devices in
-Audio MIDI Setup. None of that is used anymore. To clean up: delete the
-`Input Capture (…)` / `Output Capture (…)` devices in Audio MIDI Setup and, if you like,
-`brew uninstall --cask blackhole-2ch`. The old instructions remain in git history.
+Earlier versions routed audio through **BlackHole** plus six hand-built devices in Audio
+MIDI Setup — one `Input Capture (<device>)` aggregate and one `Output Capture (<device>)`
+multi-output per source (Jabra / Built-in / Bluetooth). **None of that is used anymore**;
+the process tap replaced all of it, and nothing in the current code references those
+devices, the BlackHole driver, or any output rerouting. Existing recordings are unaffected.
+
+Removing it is optional cleanup. Two independent steps, safest order:
+
+1. **Delete the custom devices (zero risk, reversible).** Open **Audio MIDI Setup**, and in
+   the left-hand device list delete every `Input Capture (…)` and `Output Capture (…)`
+   entry (select → `-` button, or right-click → *Remove Device*). These were created only
+   for the old path; macOS rebuilds nothing on its own, and you can recreate them later
+   from this file's git history if ever needed.
+
+2. **Uninstall the BlackHole driver (only if nothing else uses it).** BlackHole is a
+   system-wide virtual audio driver — leave it if any other app routes audio through it
+   (OBS, screen recording with sound, Loopback, etc.). To remove it, quit audio apps, then
+   from the Homebrew **install account** (the everyday account can't `brew uninstall`):
+
+   ```
+   brew uninstall --cask blackhole-2ch
+   ```
+
+   Reopen Audio MIDI Setup afterward to confirm the `BlackHole 2ch` device is gone.
+
+The old BlackHole-era setup instructions remain in git history if you ever need them.

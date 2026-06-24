@@ -24,6 +24,7 @@
 //   --list     print input devices (name + UID + channels) and exit.
 //   --log      mirror progress to this file (since `open` detaches stdout).
 
+import AppKit
 import AudioToolbox
 import CoreAudio
 import Foundation
@@ -42,6 +43,54 @@ func log(_ s: String) {
     }
 }
 func fail(_ s: String) -> Never { log("FATAL: \(s)"); exit(1) }
+
+// MARK: system-audio-capture TCC authorization (macOS 14.4+; gates reading a process tap)
+// On macOS 15+/26/27 reading a tap is gated by the private `kTCCServiceAudioCapture` TCC
+// service, SEPARATE from Microphone. The Info.plist must carry `NSAudioCaptureUsageDescription`
+// (note: the purpose string, NOT `NSSystemAudioCaptureUsageDescription`), but that key alone
+// never auto-prompts for this service (unlike Microphone, which coreaudiod prompts for) — the
+// app must explicitly request it via the private TCC framework (as insidegui/AudioCap does).
+// An unauthorized tap delivers SILENCE (zeros), not an error, so without this the "Them"
+// channel is just dead air. Graceful: any failure logs a warning and proceeds (Them stays
+// silent, same as the existing far-side-silence fallback).
+func ensureSystemAudioCaptureAuthorized() {
+    typealias PreflightFn = @convention(c) (CFString, CFDictionary?) -> Int
+    typealias RequestFn = @convention(c) (CFString, CFDictionary?, @convention(block) (Bool) -> Void) -> Void
+    let service = "kTCCServiceAudioCapture" as CFString
+    guard let h = dlopen("/System/Library/PrivateFrameworks/TCC.framework/Versions/A/TCC", RTLD_NOW) else {
+        log("  WARN: couldn't load TCC framework — skipping system-audio auth (Them may be silent).")
+        return
+    }
+    if let preSym = dlsym(h, "TCCAccessPreflight") {
+        let preflight = unsafeBitCast(preSym, to: PreflightFn.self)
+        let pf = preflight(service, nil)
+        log("  system audio: preflight = \(pf)  (0=granted,1=denied,2=unknown)")
+        if pf == 0 { log("  system audio: already authorized."); return }
+    }
+    guard let reqSym = dlsym(h, "TCCAccessRequest") else {
+        log("  WARN: TCCAccessRequest unavailable — can't prompt for system audio (Them may be silent).")
+        return
+    }
+    let request = unsafeBitCast(reqSym, to: RequestFn.self)
+    // TCCAccessRequest presents its prompt from OUR process, so we need a live NSApplication
+    // / WindowServer connection — a bare CoreAudio CLI silently hangs with no UI. Spin up an
+    // accessory app (no Dock icon, like LSUIElement) and activate it so the prompt can show.
+    let nsapp = NSApplication.shared
+    nsapp.setActivationPolicy(.accessory)
+    nsapp.activate(ignoringOtherApps: true)
+    log("  requesting System Audio Recording permission — click Allow if macOS prompts…")
+    var done = false, granted = false
+    // Bind the completion to an explicit @convention(block) constant so it is a real
+    // (heap) block that may escape — TCCAccessRequest holds it for its async reply, and an
+    // inline trailing closure trips Swift's "@noescape closure has escaped" runtime trap.
+    let completion: @convention(block) (Bool) -> Void = { g in granted = g; done = true }
+    request(service, nil, completion)
+    // The completion arrives via the app run loop; pump it (we're pre-CFRunLoopRun).
+    let deadline = Date().addingTimeInterval(120)
+    while !done, Date() < deadline { CFRunLoopRunInMode(.defaultMode, 0.1, true) }
+    log(done ? "  system audio: \(granted ? "GRANTED" : "denied")."
+             : "  system audio: request timed out (Them may be silent).")
+}
 func checkErr(_ status: OSStatus, _ what: String) {
     guard status != noErr else { return }
     var s = status.bigEndian
@@ -172,6 +221,9 @@ log("  mic:     \(cfStringProp(micDev, kAudioObjectPropertyName))  [\(micUID)]"
 
 // MARK: process tap (Them)
 
+// Authorize system-audio capture BEFORE creating/reading the tap, or it yields silence.
+ensureSystemAudioCaptureAuthorized()
+
 let tapDesc: CATapDescription
 if let pid = scopePID {
     log("  tap:     ONLY pid \(pid)")
@@ -199,7 +251,12 @@ let aggDesc: [String: Any] = [
     kAudioAggregateDeviceIsStackedKey: false,
     kAudioAggregateDeviceMainSubDeviceKey: micUID,
     kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: micUID]],
-    kAudioAggregateDeviceTapAutoStartKey: true,
+    // MUST be false: with tap auto-start on, the aggregate waits for the tap to deliver
+    // its first buffer before it begins clocking, so starting `rec` in SILENCE (before the
+    // far side talks) never gets an IOProc callback and startConfirmed() fails. With it
+    // off, the mic (clock master) drives the IOProc immediately and the tap fills the right
+    // channel as soon as system audio appears. (Verified: true => FAIL in silence, false => OK.)
+    kAudioAggregateDeviceTapAutoStartKey: false,
     kAudioAggregateDeviceTapListKey: [
         [kAudioSubTapUIDKey: tapDesc.uuid.uuidString,
          kAudioSubTapDriftCompensationKey: true],
