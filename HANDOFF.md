@@ -1,5 +1,27 @@
 # Handoff — AlfredMeetings
 
+> **2026-06-23 — record.sh first-run prompt timeout: DONE. Only the final GUI confirm +
+> merge remain.** Branch `feature/coreaudio-tap-capture`, NOT merged. The confirm loop in
+> `src/bin/record.sh` (was a fixed ~10s ceiling) now watches for MeetingCapture's exact log
+> line `requesting System Audio Recording permission` and, on seeing it, extends the ceiling
+> ONCE to ~130s (`maxpolls=520`, > the app's 120s prompt wait) and prints a "click Allow"
+> hint — so the first `rec` on a never-granted machine no longer kills the System Audio
+> Recording prompt at 10s. Failure message now names both 'Microphone' and 'System Audio
+> Recording'. The already-granted path is unchanged (logs "already authorized", never the
+> request line → `maxpolls` stays 40); re-verified live this session: start confirmed in
+> **0.46s**, clean stop, state clean. Workflow repackaged (`dist/AlfredMeetings.alfredworkflow`)
+> AND the updated `record.sh` was synced into the installed Alfred workflow bundle, so the
+> next GUI `rec` already uses it. **NOTE: the first-run priming branch itself could NOT be
+> live-tested here — this machine already has the grant (`preflight == 0`), so the prompt
+> never appears; it's verified by structure + the exact log-line match + the normal path
+> still confirming fast.**
+>
+> **REMAINING (user/GUI): one GUI `rec` start→stop to confirm the common case, then MERGE
+> `feature/coreaudio-tap-capture` to main.** (A true clean-machine first-run test would need
+> a machine that has never granted system-audio capture.)
+>
+> <details><summary>Prior banner — 2026-06-22 (end of session): working end-to-end through the GUI</summary>
+>
 > **2026-06-22 (end of session) — WORKING END-TO-END THROUGH THE ALFRED GUI. Resume
 > tomorrow with ONE polish task (record.sh first-run prompt timeout), then merge.** Branch
 > `feature/coreaudio-tap-capture`, NOT merged. Last 3 commits are this session's fixes
@@ -33,7 +55,9 @@
 > **After that:** repackage (`./build.sh`) if record.sh changed, reimport into Alfred, one
 > more GUI `rec` to confirm, then MERGE `feature/coreaudio-tap-capture`.
 >
-> **Key facts for the fix (don't re-derive):**
+> </details>
+>
+> **Key facts for the fix (still useful reference; don't re-derive):**
 >   - Capture app runs from `~/Library/Application Support/AlfredMeetings/MeetingCapture.app`
 >     (path pinned in config.sh), NOT the workflow bundle — so rebuilding it via install.sh's
 >     block takes effect for Alfred immediately (no reimport needed for app-only changes).

@@ -90,17 +90,25 @@ start_recording() {
   # for the process to exist. It spends up to ~4.5s in its start-retry loop before logging
   # "recording (start confirmed)" or "FAIL"; launching the indicator any earlier leaks it
   # whenever the start ultimately fails (the cause of stray menu-bar indicators).
-  local confirmed=""
-  for _ in $(seq 1 40); do                                   # ~10s ceiling (> 4.5s window)
+  local confirmed="" maxpolls=40 i=0 primed=""               # ~10s ceiling (> 4.5s window)
+  while [ "$i" -lt "$maxpolls" ]; do
     if grep -q "recording (start confirmed)" "$log" 2>/dev/null; then confirmed=1; break; fi
     if grep -qE "^(FAIL|FATAL):" "$log" 2>/dev/null; then break; fi
-    sleep 0.25
+    # First-run priming: on a machine that has never granted system-audio capture,
+    # MeetingCapture shows the "System Audio Recording" prompt and waits up to 120s for it.
+    # Detect its request line and extend our ceiling once (a one-time prime, like the mic
+    # grant) so the user has time to click Allow instead of us killing the prompt at ~10s.
+    if [ -z "$primed" ] && grep -q "requesting System Audio Recording permission" "$log" 2>/dev/null; then
+      primed=1; maxpolls=520                                 # ~130s ceiling (> the app's 120s wait)
+      echo "🔐 First run: click Allow on the 'System Audio Recording' prompt to enable Them capture…" >&2
+    fi
+    i=$((i + 1)); sleep 0.25
   done
 
   if [ -z "$confirmed" ]; then
     pkill -INT -f "$(basename "$audio")" 2>/dev/null || true # stop a hung/late starter
     rm -f "$STATEFILE"
-    echo "❌ Recorder didn't start. If macOS shows a mic prompt for 'AlfredMeetings Capture', click Allow, then run rec again." >&2
+    echo "❌ Recorder didn't start. If macOS shows a 'Microphone' or 'System Audio Recording' prompt for 'AlfredMeetings Capture', click Allow, then run rec again." >&2
     exit 1
   fi
   # Confirmed recording → show the menu-bar "recording now" indicator (best-effort; never
