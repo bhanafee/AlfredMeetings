@@ -1,5 +1,38 @@
 # Handoff — AlfredMeetings
 
+> **2026-06-24 — Licensing + notices added (committed straight to `main`, all pushed).**
+> The project now carries an **MIT license** and documents its third-party dependencies.
+> Work done this session (commits `2753105` → `1c569fe`):
+>   - **`LICENSE`** — MIT, `Copyright (c) 2026 Brian Hanafee`. Chosen because the repo
+>     ships only original code and **redistributes none** of its dependencies (the venv is
+>     `pip`-installed and the CLI tools are Homebrew-installed on the user's machine by
+>     `setup/install.sh`), so no upstream license constrains the choice. `ffmpeg` is the
+>     GPL Homebrew build but is only invoked as a separate process → its terms don't reach
+>     this code.
+>   - **`THIRD-PARTY-NOTICES.md`** — lists the Homebrew CLI tools (ffmpeg GPL-3.0, ollama
+>     MIT, switchaudio-osx MIT), the Apple frameworks, the 3 directly-declared pip packages,
+>     and the **full 110-package venv** with per-package SPDX licenses. The big table lives
+>     between `<!-- BEGIN/END GENERATED TABLE -->` markers.
+>   - **CI guard** — `setup/check-notices.sh` fails if a dependency declared in
+>     `setup/install.sh` (pip packages + the `for t in …` CLI tools) isn't documented in the
+>     notices file. Run by `.github/workflows/notices.yml` on changes to the relevant paths
+>     (ubuntu, ~6–12s). **This is the repo's first CI** (supersedes the "no CI exists" note
+>     below). It checks *coverage, not versions* — rebuilding the venv in CI is impractical
+>     (multi-GB PyTorch, Apple-Silicon-only `mlx`) and the table isn't version-pinned.
+>   - **`--refresh` mode** — `./setup/check-notices.sh --refresh` regenerates the table
+>     in-place from the installed venv (idempotent; same SPDX map + pyannote/torchcodec
+>     overrides used to build it). Run it on a Mac after `install.sh` resolves new versions,
+>     then commit. **Gotcha fixed:** the override keys must be the hyphenated *distribution*
+>     names (`pyannote-audio`), not dotted import names, or the pyannote rows blank to bare
+>     "see project".
+>   - MIT badge added to both `README.md` and `THIRD-PARTY-NOTICES.md`; README's License
+>     section documents the refresh workflow.
+>
+> **State:** working tree clean, `main` pushed to origin (HEAD `1c569fe`), latest notices
+> CI run green. No code/behavior changed — docs + license + one CI workflow only.
+>
+> ---
+>
 > **2026-06-24 — MERGED. The Core Audio process-tap migration is on `main`.** PR #4
 > (`feature/coreaudio-tap-capture` → `main`) merged at commit `d4b8b04`; the record.sh
 > first-run prompt polish (`96a1b14`) rode in with it. Both the feature branch and the
