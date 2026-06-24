@@ -1,0 +1,26 @@
+name: Third-party notices
+
+# Guard against undocumented dependencies: every pip package and CLI tool declared in
+# setup/install.sh must appear in THIRD-PARTY-NOTICES.md. Fast, no venv build required.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'setup/install.sh'
+      - 'THIRD-PARTY-NOTICES.md'
+      - 'setup/check-notices.sh'
+      - '.github/workflows/notices.yml'
+  pull_request:
+    paths:
+      - 'setup/install.sh'
+      - 'THIRD-PARTY-NOTICES.md'
+      - 'setup/check-notices.sh'
+      - '.github/workflows/notices.yml'
+
+jobs:
+  check-notices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check THIRD-PARTY-NOTICES.md covers declared dependencies
+        run: ./setup/check-notices.sh
