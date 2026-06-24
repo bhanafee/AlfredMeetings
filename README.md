@@ -166,3 +166,8 @@ Apache-2.0). `ffmpeg` is only invoked as a separate process, so its GPL terms do
 apply to this code. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for the full
 dependency list and per-package licenses.
 
+That file is kept honest by CI: `setup/check-notices.sh` fails the build if a dependency
+declared in `setup/install.sh` isn't documented. After changing dependencies, run
+`./setup/check-notices.sh --refresh` on your Mac to regenerate the version table from the
+installed venv, then commit the result.
+
