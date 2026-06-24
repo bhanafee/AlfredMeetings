@@ -152,3 +152,14 @@ src/bin/meetings         Single-entrypoint CLI dispatcher for the shell
 src/engine/              Python engines + prompt templates
 src/indicator/           Native menu-bar "recording now" app (Swift)
 ```
+
+## License
+
+This project's source is released under the [MIT License](LICENSE).
+
+The runtime dependencies are **not** bundled or redistributed here — `setup/install.sh`
+fetches them on your machine (the Python venv via `pip`; `ffmpeg`, `ollama`, and
+`switchaudio-osx` via Homebrew). They keep their own licenses (mostly MIT / BSD /
+Apache-2.0). `ffmpeg` is only invoked as a separate process, so its GPL terms do not
+apply to this code.
+
